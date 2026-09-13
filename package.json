@@ -1,0 +1,32 @@
+{
+  "name": "webstack-agent-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:arch": "depcruise src --config .dependency-cruiser.js",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:property": "vitest run tests/property",
+    "mutate:diff": "bash scripts/mutate-diff.sh",
+    "mutate:full": "stryker run"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@stryker-mutator/core": "^8.7.1",
+    "@stryker-mutator/vitest-runner": "^8.7.1",
+    "@types/node": "^22.13.4",
+    "dependency-cruiser": "^16.10.0",
+    "eslint": "^9.20.1",
+    "fast-check": "^3.23.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.24.0",
+    "vitest": "^3.0.5"
+  },
+  "packageManager": "pnpm@9.15.4"
+}
