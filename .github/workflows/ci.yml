@@ -1,0 +1,44 @@
+name: Harness Validation Gauntlet
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  gauntlet:
+    name: Level 3 Pre-Merge Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Install Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: System Doctor
+        run: just doctor
+
+      - name: Run Level 3 Gauntlet
+        run: just gauntlet-full

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "command": "bash scripts/hooks/guard-holdouts.sh"
+      }
+    ],
+    "Stop": [
+      {
+        "command": "bash scripts/hooks/stop-gate.sh"
+      }
+    ]
+  }
+}
