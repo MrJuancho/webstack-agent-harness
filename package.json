@@ -4,24 +4,28 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node --import tsx src/http/server.ts",
+    "db:migrate": "tsx src/infra/db/migrate.ts",
+    "db:seed": "tsx src/infra/db/seed.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:arch": "depcruise src --config .dependency-cruiser.js",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:property": "vitest run tests/property",
+    "test:integration": "vitest run tests/integration",
     "mutate:diff": "bash scripts/mutate-diff.sh",
     "mutate:full": "stryker run"
   },
   "dependencies": {
-    "@fastify/swagger": "^9.8.1",
-    "@fastify/swagger-ui": "^6.1.1",
-    "@fastify/type-provider-typebox": "^6.1.0",
-    "@sinclair/typebox": "^0.34.52",
+    "@fastify/swagger": "^9.4.2",
+    "@fastify/swagger-ui": "^5.2.2",
+    "@fastify/type-provider-typebox": "^5.1.0",
+    "@sinclair/typebox": "^0.34.14",
     "dotenv": "^16.4.7",
-    "drizzle-orm": "^0.45.2",
-    "fastify": "^5.12.4",
-    "postgres": "^3.4.9"
+    "drizzle-orm": "^0.39.3",
+    "fastify": "^5.2.1",
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",
@@ -29,9 +33,10 @@
     "@stryker-mutator/vitest-runner": "^8.7.1",
     "@types/node": "^22.13.4",
     "dependency-cruiser": "^16.10.0",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-kit": "^0.30.4",
     "eslint": "^9.20.1",
     "fast-check": "^3.23.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.24.0",
     "vitest": "^3.0.5"

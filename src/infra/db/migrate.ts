@@ -1,0 +1,17 @@
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import postgres from 'postgres';
+import 'dotenv/config';
+
+const connectionString =
+  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:5432/webstack_dev';
+
+const sql = postgres(connectionString, { max: 1 });
+const db = drizzle(sql);
+
+export async function runMigrations(): Promise<void> {
+  await migrate(db, { migrationsFolder: 'src/infra/db/migrations' });
+  await sql.end();
+}
+
+await runMigrations();

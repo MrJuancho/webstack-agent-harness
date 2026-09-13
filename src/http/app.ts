@@ -2,7 +2,7 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply, RouteOptions } 
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
-import { Type } from '@sinclair/typebox';
+import { Type, Static } from '@sinclair/typebox';
 
 // Declaración de tipos para metadata de rutas
 declare module 'fastify' {
@@ -10,6 +10,13 @@ declare module 'fastify' {
     isPublic?: boolean;
   }
 }
+
+// Esquema estándar para errores de API
+export const ErrorResponse = Type.Object(
+  { error: Type.String() },
+  { additionalProperties: false }
+);
+export type ErrorResponseType = Static<typeof ErrorResponse>;
 
 // Hook de autenticación centinela
 export const requireAuth = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
@@ -29,7 +36,6 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     logger: false,
   }).withTypeProvider<TypeBoxTypeProvider>();
 
-  // Escuchar registro de rutas si se solicita introspección
   if (options.onRoute) {
     app.addHook('onRoute', options.onRoute);
   }
@@ -57,8 +63,19 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     routePrefix: '/docs',
   });
 
+  // 2. Exposición del esquema OpenAPI en JSON crudo
+  app.get(
+    '/openapi.json',
+    {
+      config: { isPublic: true },
+      schema: {
+        description: 'Especificación OpenAPI 3.0 del sistema en formato JSON',
+      },
+    },
+    () => app.swagger()
+  );
 
-  // 2. Ruta Pública Explícita (Health Check)
+  // 3. Ruta Pública Explícita (Health Check)
   app.get(
     '/health',
     {
@@ -76,7 +93,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     () => ({ status: 'ok' })
   );
 
-  // 3. Ruta Protegida (Ejemplo)
+  // 4. Ruta Protegida con contrato 200 y 401 documentado
   app.get(
     '/api/v1/profile',
     {
@@ -89,6 +106,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
             { message: Type.String() },
             { additionalProperties: false }
           ),
+          401: ErrorResponse,
         },
       },
     },
