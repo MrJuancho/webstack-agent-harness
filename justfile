@@ -3,16 +3,20 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
+# Diagnóstico fail-closed de herramientas
+doctor:
+    bash scripts/doctor.sh
+
 # Nivel 1: Hook de agente / pre-commit (<5s)
 gauntlet-fast:
-    @command -v pnpm >/dev/null 2>&1 || (echo "ERROR: pnpm no está instalado o no está en PATH" && exit 1)
-    @command -v gitleaks >/dev/null 2>&1 || (echo "ERROR: gitleaks no está instalado. Bloqueo preventivo." && exit 1)
+    @command -v pnpm >/dev/null 2>&1 || (echo "ERROR: pnpm ausente" && exit 1)
+    @command -v gitleaks >/dev/null 2>&1 || (echo "ERROR: gitleaks ausente" && exit 1)
     gitleaks protect --staged --verbose
     pnpm run typecheck
     pnpm run lint
     pnpm run test:unit
 
-# Nivel 2: Verificación estructural, arquitectura, deriva, migraciones e integración (<30s)
+# Nivel 2: Verificación estructural, arquitectura, deriva, migraciones e integración
 gauntlet: gauntlet-fast
     pnpm run lint:arch
     just db-up
@@ -21,7 +25,7 @@ gauntlet: gauntlet-fast
     pnpm exec vitest run tests/architecture
     pnpm run test:integration
 
-# Nivel 3: Pre-merge y CI (Property testing, Contratos, Seeds, Hold-outs y Mutation del diff)
+# Nivel 3: Pre-merge y CI (Property testing, Contratos, Seeds, Hold-outs y Mutation)
 gauntlet-full: gauntlet
     pnpm run test:property
     just test-contracts
@@ -29,40 +33,56 @@ gauntlet-full: gauntlet
     just test-holdouts
     pnpm run mutate:diff
 
-# Nivel 4: Auditoría nocturna (Mutation testing completo)
+# Nivel 4: Auditoría nocturna exhaustiva
 audit:
     pnpm run mutate:full
 
-# Infraestructura y Base de Datos
+# Infraestructura y Base de Datos (Proyecto unificado)
 db-up:
-    docker compose up -d
-    @docker compose exec -T postgres pg_isready -U postgres -d webstack_dev || (echo "Esperando a postgres..." && sleep 2)
+    docker compose -p webstack-agent-harness up -d
+    @docker compose -p webstack-agent-harness exec -T postgres pg_isready -U postgres -d webstack_dev || (echo "Esperando a postgres..." && sleep 2)
 
 db-down:
-    docker compose down
+    docker compose -p webstack-agent-harness down
 
 db-generate:
     pnpm exec drizzle-kit generate
 
-# Gate 2: Schema Drift
 db-drift-check:
     bash scripts/test-db-drift.sh
 
-# Gate 1: Migraciones Reversibles Up/Down
 db-migrate-reversible:
     just db-up
     bash scripts/test-migrations-reversible.sh
 
-# Gate 7: Determinismo de Seeds
 db-seed-check:
     just db-up
     bash scripts/test-seed-determinism.sh
 
-# Gate 3: Verificación de Contratos OpenAPI con Schemathesis
 test-contracts:
-    @command -v docker >/dev/null 2>&1 || (echo "ERROR: Docker es requerido para ejecutar Schemathesis" && exit 1)
+    @command -v docker >/dev/null 2>&1 || (echo "ERROR: Docker ausente" && exit 1)
     bash scripts/test-contracts.sh
 
-# Gate 5: Verificación e Integridad de Hold-Out Tests
 test-holdouts:
     bash scripts/test-holdouts.sh
+
+# RUTA EXCLUSIVA HUMANA: Sellado de suite hold-out
+seal-holdouts:
+    @echo "==> ATENCIÓN: Sellando tests hold-out con firma SHA-256..."
+    find tests/holdout -type f -name "*.ts" | sort | xargs sha256sum > .holdout.sha256
+    @echo "✔ Sello actualizado en .holdout.sha256"
+
+# Orquestación de Worktrees de Revisión
+review-start BRANCH="HEAD":
+    @git worktree remove ../reviewer-workspace --force 2>/dev/null || true
+    @rm -rf ../reviewer-workspace
+    @git worktree prune
+    git worktree add --detach ../reviewer-workspace {{BRANCH}}
+    cd ../reviewer-workspace && pnpm install --frozen-lockfile
+    @echo "✔ Worktree de revisión listo en ../reviewer-workspace"
+
+review-clean:
+    git worktree remove ../reviewer-workspace --force 2>/dev/null || true
+    @rm -rf ../reviewer-workspace
+    git worktree prune
+    @echo "✔ Worktree de revisión desmontado y podado"

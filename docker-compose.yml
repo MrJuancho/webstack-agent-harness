@@ -1,3 +1,5 @@
+name: webstack-agent-harness
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -7,12 +9,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: webstack_dev
+    tmpfs:
+      - /var/lib/postgresql/data:rw,noexec,nosuid,size=512m
     ports:
       - "5432:5432"
-    tmpfs:
-      - /var/lib/postgresql/data:rw,noexec,nosuid,size=1024m
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d webstack_dev"]
-      interval: 2s
-      timeout: 3s
-      retries: 5
