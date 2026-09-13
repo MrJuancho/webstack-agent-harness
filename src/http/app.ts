@@ -1,0 +1,99 @@
+import Fastify, { FastifyInstance, FastifyRequest, FastifyReply, RouteOptions } from 'fastify';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import { Type } from '@sinclair/typebox';
+
+// Declaración de tipos para metadata de rutas
+declare module 'fastify' {
+  interface FastifyContextConfig {
+    isPublic?: boolean;
+  }
+}
+
+// Hook de autenticación centinela
+export const requireAuth = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  const authHeader = request.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    await reply.status(401).send({ error: 'Unauthorized: Missing or invalid token' });
+    return;
+  }
+};
+
+export interface BuildAppOptions {
+  onRoute?: (routeOptions: RouteOptions) => void;
+}
+
+export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: false,
+  }).withTypeProvider<TypeBoxTypeProvider>();
+
+  // Escuchar registro de rutas si se solicita introspección
+  if (options.onRoute) {
+    app.addHook('onRoute', options.onRoute);
+  }
+
+  // 1. Configuración de OpenAPI / Swagger
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Webstack Agent Harness API',
+        version: '0.1.0',
+      },
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+        },
+      },
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+  });
+
+
+  // 2. Ruta Pública Explícita (Health Check)
+  app.get(
+    '/health',
+    {
+      config: { isPublic: true },
+      schema: {
+        description: 'Endpoint de salud del sistema',
+        response: {
+          200: Type.Object(
+            { status: Type.String() },
+            { additionalProperties: false }
+          ),
+        },
+      },
+    },
+    () => ({ status: 'ok' })
+  );
+
+  // 3. Ruta Protegida (Ejemplo)
+  app.get(
+    '/api/v1/profile',
+    {
+      preHandler: [requireAuth],
+      schema: {
+        description: 'Perfil de usuario autenticado',
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: Type.Object(
+            { message: Type.String() },
+            { additionalProperties: false }
+          ),
+        },
+      },
+    },
+    () => ({ message: 'Acceso autorizado' })
+  );
+
+  return app;
+}

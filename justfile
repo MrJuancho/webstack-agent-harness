@@ -16,6 +16,7 @@ gauntlet-fast:
 gauntlet: gauntlet-fast
     pnpm run lint:arch
     just db-drift-check
+    pnpm exec vitest run tests/architecture
 
 # Nivel 3: Pre-merge y CI (Property testing y Mutation del diff)
 gauntlet-full: gauntlet
