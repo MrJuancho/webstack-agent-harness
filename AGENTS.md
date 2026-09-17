@@ -2,6 +2,8 @@
 
 Este repositorio opera bajo una arquitectura de **falla cerrada (fail-closed)**. Ninguna tarea se considera completa si no existe verificación reproducible de código (exit 0).
 
+Antes de explorar el repo para reconstruir en qué quedó el trabajo, lee [`docs/progress.md`](./docs/progress.md) — es el handoff entre sesiones (en qué quedó la anterior, qué sigue, qué está bloqueado). Se sobrescribe en cada sesión, no se acumula; al terminar la tuya, actualízalo con el estado real, no lo dejes con el de la sesión pasada.
+
 ---
 
 ## 1. Jerarquía de Verificación (`justfile`)

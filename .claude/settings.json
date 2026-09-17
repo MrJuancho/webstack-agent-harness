@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/guard-holdouts.sh"
+            "command": "bash ${CLAUDE_PROJECT_DIR}/scripts/hooks/guard-holdouts.sh || exit 2"
           }
         ]
       }
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash scripts/hooks/stop-gate.sh"
+            "command": "bash ${CLAUDE_PROJECT_DIR}/scripts/hooks/stop-gate.sh || exit 2"
           }
         ]
       }

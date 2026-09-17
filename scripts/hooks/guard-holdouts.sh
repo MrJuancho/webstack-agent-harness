@@ -5,9 +5,12 @@ set -euo pipefail
 INPUT=$(cat)
 
 # Si jq falla o no puede procesar el JSON, FALLA CERRADO de inmediato
+# NOTA: exit 2 es el UNICO codigo que bloquea un hook PreToolUse en Claude
+# Code; exit 1 se trata como no-bloqueante y la herramienta procede igual
+# (verificado contra https://code.claude.com/docs/en/hooks).
 if ! echo "$INPUT" | jq empty >/dev/null 2>&1; then
   echo "ERROR FATAL: Hook no pudo procesar el payload de entrada. Bloqueo preventivo." >&2
-  exit 1
+  exit 2
 fi
 
 # Extraer rutas de archivos involucradas en la llamada a la herramienta
@@ -26,7 +29,7 @@ fi
 if echo "$TARGET_PATH" | grep -qE '(tests/holdout|\.holdout\.sha256)'; then
   echo "ACCESO DENEGADO (Gate 5): 'tests/holdout/' y '.holdout.sha256' son inmutables para el agente." >&2
   echo "Cualquier alteración de invariantes de seguridad requiere intervención humana directa." >&2
-  exit 1
+  exit 2
 fi
 
 exit 0
