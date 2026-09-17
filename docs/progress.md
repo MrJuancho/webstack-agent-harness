@@ -39,3 +39,4 @@ verificación que existe en la documentación pero no en la práctica:
 ## Bloqueado / pendiente de decisión
 
 Ninguno.
+# branch protection test Thu Sep 17 01:55:31 CST 2026
