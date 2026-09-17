@@ -1,0 +1,79 @@
+_min_copier_version: "9.0.0"
+_subdirectory: template
+
+# docs/progress.md es el handoff entre sesiones -- se genera una sola vez
+# con el semilla vacío y a partir de ahí contiene estado real del
+# proyecto, no plantilla. `_skip_if_exists` (no `_exclude`) es lo que da
+# "se genera en el primer copier copy, pero copier update nunca lo vuelve
+# a tocar": ese ajuste solo actúa contra un archivo que YA EXISTE en el
+# destino -- en la primera generación el destino está vacío, así que el
+# semilla sí se crea; en un `copier update` posterior, el archivo ya
+# existe con contenido real, y ahí es donde se preserva sin sobrescribir.
+# Mismo patrón que gauntlet-template (ver su copier.yml para el porqué
+# completo, verificado ahí con una corrida real de copy + update).
+_skip_if_exists:
+  - "docs/progress.md"
+
+# `justfile` NO tiene sufijo `.jinja` a propósito: `just` usa su propia
+# sintaxis `{{variable}}` para parámetros de receta (ver `review-start
+# BRANCH="HEAD":` y su `{{BRANCH}}`), que colisiona con los delimitadores
+# por defecto de Jinja. Si `justfile` se copiara/renderizara como plantilla
+# Jinja, `{{BRANCH}}` se interpretaría como una variable de Copier
+# inexistente y fallaría. En vez de eso, `justfile` se copia literal y las
+# dos sustituciones que necesita (`__PACKAGE_NAME__`, `__DB_NAME__`) se
+# resuelven con `sed` en `_tasks`, después de copiar.
+_tasks:
+  # git init primero: `just install-hooks` (parte de `just setup`) necesita
+  # que exista `.git/hooks/`, y `copier copy` no inicializa git por su
+  # cuenta. Verificado con una corrida real: sin este paso, `just setup`
+  # falla en `install-hooks` con "No such file or directory" en un proyecto
+  # recién generado.
+  - "git init -q || true"
+  - "sed -i 's/__PACKAGE_NAME__/{{ package_name }}/g; s/__DB_NAME__/{{ db_name }}/g' justfile"
+  - "command -v bash >/dev/null 2>&1 && bash scripts/generate-pdf.sh || true"
+  - "command -v just >/dev/null 2>&1 && just --unstable --fmt 2>/dev/null || true"
+
+_message_after_copy: |
+  Proyecto generado.
+
+  Próximos pasos:
+    cd {{ _copier_conf.dst_path }}
+    just setup
+    just doctor
+    just gauntlet
+
+  Lee AGENTS.md y docs/progress.md. Antes de que el guantelete tenga sentido
+  para este dominio: resella tests/holdout/ con invariantes reales del
+  proyecto (just seal-holdouts) y reemplaza el ejemplo de dominio
+  (src/domain/clamp.ts, la tabla audit_logs) por el real.
+
+project_name:
+  type: str
+  help: Nombre del proyecto (legible, puede tener espacios)
+
+package_name:
+  type: str
+  help: >-
+    Nombre del paquete npm / proyecto de Docker Compose (kebab-case, sin
+    espacios ni mayúsculas)
+  default: "{{ project_name | lower | replace(' ', '-') }}"
+  validator: >-
+    {% if not (package_name | regex_search('^[a-z][a-z0-9-]*$')) %}
+    package_name debe ser kebab-case válido: empezar con minúscula, solo
+    minúsculas/dígitos/guion.
+    {% endif %}
+
+db_name:
+  type: str
+  help: Nombre de la base de datos PostgreSQL (snake_case)
+  default: "{{ package_name | replace('-', '_') }}_dev"
+  validator: >-
+    {% if not (db_name | regex_search('^[a-z][a-z0-9_]*$')) %}
+    db_name debe ser snake_case válido: empezar con minúscula, solo
+    minúsculas/dígitos/guion bajo.
+    {% endif %}
+
+github_owner:
+  type: str
+  help: Usuario u organización de GitHub donde vivirá el repo (badge de CI)
+  default: "MrJuancho"

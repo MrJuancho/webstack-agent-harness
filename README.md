@@ -1,120 +1,66 @@
-# Webstack Agent Harness
+# webstack-agent-harness
 
-![CI](https://github.com/MrJuancho/webstack-agent-harness/actions/workflows/ci.yml/badge.svg)
+A [Copier](https://copier.readthedocs.io/) template that scaffolds a fail-closed
+engineering harness for TypeScript/Fastify/Drizzle projects built by autonomous coding
+agents: 8 verification gates, 4 layers of enforcement, Claude Code subagents, and a
+spec-kit workflow, ready on `copier copy`.
 
-A fail-closed engineering harness for software built by autonomous coding agents. It
-doesn't ship a product — it ships the guardrails: 8 verification gates, 4 layers of
-enforcement, and a tiered `just` command set, so an agent can iterate fast without ever
-being able to quietly fake a passing state.
+This repo is the **template**, not a runnable project — there's no `package.json` or
+`justfile` at this level. Everything a generated project gets lives under
+[`template/`](./template/); this root only holds the things about *maintaining the
+template itself*: [`copier.yml`](./copier.yml), [`docs/adr/`](./docs/adr/) (decisions
+about the harness's own design), and [`docs/progress.md`](./docs/progress.md) (session
+handoff for whoever is working on the template).
 
-If you're an agent working in this repo, read [`AGENTS.md`](./AGENTS.md) first — it's
-the operational protocol you're expected to follow, and it points to
-[`docs/progress.md`](./docs/progress.md) (what the last session left, overwritten each
-session) so you don't have to re-derive state from scratch. Humans should read
-[`.specify/memory/constitution.md`](./.specify/memory/constitution.md) for the *why*
-behind the rules, [`docs/adr/`](./docs/adr/) for specific decisions and their rationale,
-and the full spec at
-[`docs/webstack-agent-harness-spec.html`](./docs/webstack-agent-harness-spec.html) (also
-available as a [PDF](./docs/webstack-agent-harness-spec.pdf)) for the complete reference.
-
-## Quick start
+## Generate a new project
 
 ```bash
+uv tool install copier   # or: pipx install copier
+copier copy https://github.com/MrJuancho/webstack-agent-harness.git my-new-project
+cd my-new-project
 just setup
 ```
 
-This bootstraps a fresh clone end-to-end: checks required tooling (`just doctor`),
-installs dependencies, installs the git pre-commit hook, resets the dev database, and
-runs the Level 2 gauntlet to confirm everything is green.
+You'll be asked for `project_name` (human title), `package_name` (kebab-case slug,
+defaults from `project_name`), `db_name` (defaults from `package_name`), and
+`github_owner` (defaults to `MrJuancho`).
 
-Requires: Node.js 22+, pnpm, Docker, `just`, Gitleaks, `jq`, `curl`.
+## Pull in template improvements later
 
-## The verification tiers
+Any fix or improvement made here (a corrected hook, a new gate, a hardened default)
+can be pulled into an already-generated project without redoing it by hand:
 
-| Tier | Command | When | Scope |
-|---|---|---|---|
-| 1 | `just gauntlet-fast` | after every file edit | typecheck, lint, unit tests, staged-secret scan |
-| 2 | `just gauntlet` | before every commit | architecture isolation, schema drift, reversible migrations, auth matrix, N+1 detection |
-| 3 | `just gauntlet-full` | before merge/PR | property tests, OpenAPI contract fuzzing, seed determinism, hold-out integrity, diff mutation |
-| 4 | `just audit` | scheduled | full-domain mutation testing |
-
-Each tier includes everything in the tier below it. Details on all 8 gates live in
-[`AGENTS.md`](./AGENTS.md#2-los-8-gates-de-seguridad).
-
-## Enforcement, not just checks
-
-A gate only matters if an agent can't route around it. Four independent layers make
-sure of that:
-
-1. **Agent hooks** (`.claude/settings.json`) — block writes to the hold-out test suite,
-   block ending a turn on a red `gauntlet-fast`, and give fast (non-blocking) lint
-   feedback per edited file. The two security hooks fail *closed*; the feedback hook
-   fails *open* — see `AGENTS.md` for the classification and why it matters.
-2. **Git pre-commit** (`scripts/hooks/pre-commit.sh`, installed via `just install-hooks`)
-   — runs `gauntlet-fast` before any local commit.
-3. **CI** (`.github/workflows/ci.yml`) — runs `just doctor` + `just gauntlet-full` on a
-   clean container for every push/PR to `main`.
-4. **Branch protection** — `main` requires the CI check green before merge.
-
-## Spec-driven development
-
-This repo uses [spec-kit](https://github.com/github/spec-kit) to plan features before
-an agent implements them, so intent survives a dead session or a switch between agents
-— write it to a file, not just to chat. Available skills:
-
-| Command | Purpose |
-|---|---|
-| `/speckit-constitution` | Establish or amend project principles |
-| `/speckit-specify` | Write a baseline feature specification |
-| `/speckit-clarify` | *(optional)* De-risk ambiguous areas before planning |
-| `/speckit-plan` | Turn a spec into an implementation plan |
-| `/speckit-tasks` | Break a plan into actionable tasks |
-| `/speckit-analyze` | *(optional)* Cross-check spec/plan/tasks for consistency |
-| `/speckit-implement` | Execute the planned tasks |
-| `/speckit-converge` | Assess the codebase and append remaining work as tasks |
-
-The gauntlet still enforces *how well* the result is built; spec-kit just makes sure
-*what to build* isn't only ever said out loud.
-
-## Project structure
-
-```
-.
-├── .claude/
-│   ├── agents/               # generator.md, reviewer.md — Claude Code subagents
-│   └── settings.json         # Agent hooks (Layer 1)
-├── .specify/                 # Spec-kit templates, scripts, and the constitution
-├── docs/
-│   ├── adr/                  # Architecture decisions: context + consequences
-│   └── progress.md           # Session handoff — overwritten, not accumulated
-├── scripts/
-│   ├── doctor.sh            # Fail-closed tooling check
-│   ├── hooks/                # Agent + git hooks (Layers 1-2)
-│   └── test-*.sh             # Individual gate implementations
-├── src/
-│   ├── domain/               # Pure business logic (no infra/http imports)
-│   ├── http/                  # Fastify app + routes
-│   └── infra/db/             # Drizzle schema, migrations, client
-├── tests/
-│   ├── architecture/          # Gate 4: auth matrix
-│   ├── holdout/                # Gate 5: sealed security invariants
-│   ├── integration/            # Gate 6: N+1 detection
-│   ├── property/                 # fast-check property tests
-│   └── unit/
-└── justfile                    # Task orchestration for all tiers
+```bash
+cd my-existing-project
+copier update
 ```
 
-## Roles for concurrent work
+Copier re-applies the template on top of the project's current state, using the
+answers recorded in `.copier-answers.yml` at generation time. Project-specific edits to
+templated files may produce a merge conflict you resolve like a normal git conflict;
+`docs/progress.md` is explicitly protected (`_skip_if_exists` in `copier.yml`) and is
+never touched by an update.
 
-Codified as Claude Code subagents in `.claude/agents/`:
+## Why a template instead of a plain clone
 
-- **Generator** (`generator.md`) — the only role with `Edit`/`Write`. Works at the repo
-  root on a feature branch, running `gauntlet-fast` continuously.
-- **Reviewer** (`reviewer.md`) — no `Edit`/`Write`; reviews a diff with a clean context
-  (never the conversation that produced it). Never inspects code in a tree another
-  process might be modifying — uses `just review-start <branch>` for an isolated git
-  worktree and `just review-clean` to tear it down. This is plain `git worktree`, not
-  tied to any particular IDE or agent-orchestration tool.
+This started as a plain repo, cloned per project (see
+[`docs/adr/0002-instanciacion-clon-no-template.md`](./docs/adr/0002-instanciacion-clon-no-template.md)
+for that original decision and why it changed) — every improvement had to be
+manually ported into every project that already existed. Converting to Copier trades
+that manual step for the templating machinery above: `{{ variable }}` substitution,
+`.jinja`-suffixed files, and `copier update`'s ability to diff-and-reapply.
 
-See [`AGENTS.md`](./AGENTS.md#4-roles-operativos-y-aislamiento-con-git-worktrees) for
-the full protocol.
+One deliberate exception: `template/justfile` is **not** `.jinja`-suffixed. `just`'s own
+recipe syntax uses `{{ }}` for parameters (see `review-start BRANCH="HEAD":` and its
+`{{BRANCH}}`), which collides with Jinja's default delimiters — rendering it as a
+template would try to resolve `{{BRANCH}}` as a missing Copier variable and fail. It's
+copied literally instead, and its two real substitutions (`__PACKAGE_NAME__`,
+`__DB_NAME__`) are resolved with `sed` in `copier.yml`'s `_tasks`, after copying.
+
+## What's deliberately not here yet
+
+There's no automated test suite verifying the template mechanism itself (that
+`copier copy` reliably produces a project where `just gauntlet` passes) — verified
+manually once per change instead. If this template starts changing often enough for
+that manual check to become a bottleneck, that's worth revisiting; see
+`docs/progress.md` for current status.

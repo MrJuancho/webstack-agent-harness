@@ -44,7 +44,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(swagger, {
     openapi: {
       info: {
-        title: 'Webstack Agent Harness API',
+        title: '{{ project_name }} API',
         version: '0.1.0',
       },
       components: {

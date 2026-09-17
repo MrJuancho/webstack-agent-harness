@@ -55,7 +55,7 @@ intención en vez de leerla en el código.
    - ¿Se agregó DDL manual (`CREATE TABLE IF NOT EXISTS` o similar) dentro
      de un test en vez de dejar que las migraciones reales creen el
      esquema? Ya pasó una vez en este repo: enmascaró que `just gauntlet`
-     nunca migraba `webstack_dev` de verdad.
+     nunca migraba la base de datos de desarrollo de verdad.
    - ¿Se bajó `break` en `stryker.config.mjs`, o algún umbral en
      `justfile`/`scripts/test-*.sh`?
    - ¿Se usó `.skip`/`.todo` en un test de Vitest, o se filtró qué tests

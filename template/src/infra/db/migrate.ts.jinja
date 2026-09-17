@@ -4,7 +4,7 @@ import postgres from 'postgres';
 import 'dotenv/config';
 
 const connectionString =
-  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:5432/webstack_dev';
+  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:5432/{{ db_name }}';
 
 const sql = postgres(connectionString, { max: 1 });
 const db = drizzle(sql);

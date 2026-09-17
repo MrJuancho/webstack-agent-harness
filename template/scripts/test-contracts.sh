@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PID_FILE="/tmp/webstack-contracts.pid"
+PID_FILE="/tmp/_gauntlet-contracts.pid"
 LOG_FILE="/tmp/server_contracts.log"
 
 cleanup() {

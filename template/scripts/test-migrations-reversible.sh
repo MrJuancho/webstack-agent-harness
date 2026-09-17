@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MIGRATIONS_DIR="src/infra/db/migrations"
-TEST_DB="webstack_migrate_rev_test"
+TEST_DB="_gauntlet_migrate_rev_test"
 DUMP_BEFORE="/tmp/schema_before.sql"
 DUMP_AFTER="/tmp/schema_after.sql"
 

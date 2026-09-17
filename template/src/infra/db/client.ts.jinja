@@ -3,7 +3,7 @@ import postgres from 'postgres';
 import * as schema from './schema.js';
 
 const connectionString =
-  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:5432/webstack_dev';
+  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:5432/{{ db_name }}';
 
 type QueryListener = (query: string) => void;
 let activeQueryListener: QueryListener | null = null;

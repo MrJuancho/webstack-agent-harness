@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HTML_OUT="docs/webstack-agent-harness-spec.html"
-PDF_OUT="docs/webstack-agent-harness-spec.pdf"
+HTML_OUT="docs/spec.html"
+PDF_OUT="docs/spec.pdf"
 
 echo "1. Generando especificación técnica en HTML..."
 cat << 'HTMLEOF' > "$HTML_OUT"
@@ -10,7 +10,7 @@ cat << 'HTMLEOF' > "$HTML_OUT"
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Webstack Agent Harness — Especificación Técnica & Manual de Arquitectura</title>
+  <title>{{ project_name }} — Especificación Técnica & Manual de Arquitectura</title>
   <style>
     @page {
       size: A4;
@@ -56,7 +56,7 @@ cat << 'HTMLEOF' > "$HTML_OUT"
   <!-- PORTADA -->
   <div class="cover">
     <span class="badge">SPECIFICATION V1.2 • FAIL-CLOSED</span>
-    <h1>Webstack Agent Harness</h1>
+    <h1>{{ project_name }}</h1>
     <div class="subtitle">Arnés de Ingeniería de Software para Desarrollo Guiado por Agentes Autónomos</div>
     <p><strong>Stack Tecnológico:</strong> Node.js 22 LTS, TypeScript 5, Fastify, TypeBox, Drizzle ORM, PostgreSQL 16 (tmpfs), Vitest, Stryker Mutator, fast-check, Schemathesis, Gitleaks.</p>
     <p><strong>Entorno Operativo:</strong> WSL2 / Ubuntu Linux con Docker Compose.</p>
@@ -223,7 +223,7 @@ cat << 'HTMLEOF' > "$HTML_OUT"
       <tr><td><code>just setup</code></td><td>Bootstrap completo de un clon nuevo: doctor, instalación de dependencias, instalación del git hook, reset de base de datos y Nivel 2 en verde.</td></tr>
       <tr><td><code>just doctor</code></td><td>Verifica fail-closed que todas las herramientas del sistema estén instaladas antes de operar.</td></tr>
       <tr><td><code>just install-hooks</code></td><td>Instala <code>scripts/hooks/pre-commit.sh</code> como <code>.git/hooks/pre-commit</code> en el clon local (Capa 2).</td></tr>
-      <tr><td><code>just db-reset</code></td><td>Recrea <code>webstack_dev</code> desde cero y aplica las migraciones oficiales de Drizzle.</td></tr>
+      <tr><td><code>just db-reset</code></td><td>Recrea <code>{{ db_name }}</code> desde cero y aplica las migraciones oficiales de Drizzle.</td></tr>
       <tr><td><code>just seal-holdouts</code></td><td>Ruta exclusiva humana: recalcula <code>.holdout.sha256</code> tras un cambio intencional a la suite hold-out.</td></tr>
       <tr><td><code>just review-start</code> / <code>review-clean</code></td><td>Despliega o desmonta un git worktree aislado para el rol Reviewer.</td></tr>
     </tbody>

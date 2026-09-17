@@ -1,7 +1,11 @@
 # ADR-0002: Nuevos proyectos se instancian clonando y reiniciando git, no vía GitHub template
 
-**Estado:** Aceptado
+**Estado:** Superado por [ADR-0003](./0003-migracion-a-copier-template.md) (2026-09-17)
 **Fecha:** 2026-09-16
+
+> Esta decisión se revirtió al día siguiente de tomarse. Se conserva sin editar como
+> registro histórico de por qué se eligió clon+`git init` en su momento -- ver ADR-0003
+> para la decisión vigente y qué cambió.
 
 ## Contexto
 

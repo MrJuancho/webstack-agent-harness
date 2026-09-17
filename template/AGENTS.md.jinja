@@ -1,5 +1,13 @@
 # AGENTS.md — Protocolo Operativo del Harness
 
+Guía operativa para agentes que editan este repositorio ({{ project_name }}). Generado
+desde [webstack-agent-harness](https://github.com/MrJuancho/webstack-agent-harness) —
+las secciones de aquí describen la operación del guantelete en sí (gates, capas de
+enforcement, roles); son transversales a cualquier proyecto generado desde este
+template y se actualizan vía `copier update`, no reescribiéndolas por proyecto. Lo
+específico de {{ project_name }} (dominio, capas de arquitectura reales si difieren del
+esqueleto de ejemplo, deuda conocida) va en `docs/adr/` y `docs/progress.md`, no aquí.
+
 Este repositorio opera bajo una arquitectura de **falla cerrada (fail-closed)**. Ninguna tarea se considera completa si no existe verificación reproducible de código (exit 0).
 
 Antes de explorar el repo para reconstruir en qué quedó el trabajo, lee [`docs/progress.md`](./docs/progress.md) — es el handoff entre sesiones (en qué quedó la anterior, qué sigue, qué está bloqueado). Se sobrescribe en cada sesión, no se acumula; al terminar la tuya, actualízalo con el estado real, no lo dejes con el de la sesión pasada.

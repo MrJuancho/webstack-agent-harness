@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-TEST_DB="webstack_seed_test"
+TEST_DB="_gauntlet_seed_test"
 DUMP1="/tmp/seed_run1.sql"
 DUMP2="/tmp/seed_run2.sql"
 HASH1="/tmp/seed_run1.hash"

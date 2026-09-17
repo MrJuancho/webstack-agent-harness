@@ -55,16 +55,16 @@ audit:
 
 # Infraestructura y Base de Datos (Proyecto unificado)
 db-up:
-    docker compose -p webstack-agent-harness up -d
-    @docker compose -p webstack-agent-harness exec -T postgres pg_isready -U postgres -d webstack_dev || (echo "Esperando a postgres..." && sleep 2)
+    docker compose -p __PACKAGE_NAME__ up -d
+    @docker compose -p __PACKAGE_NAME__ exec -T postgres pg_isready -U postgres -d __DB_NAME__ || (echo "Esperando a postgres..." && sleep 2)
 
 db-down:
-    docker compose -p webstack-agent-harness down
+    docker compose -p __PACKAGE_NAME__ down
 
 db-reset:
     just db-up
-    @docker compose -p webstack-agent-harness exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS webstack_dev;" >/dev/null
-    @docker compose -p webstack-agent-harness exec -T postgres psql -U postgres -c "CREATE DATABASE webstack_dev;" >/dev/null
+    @docker compose -p __PACKAGE_NAME__ exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS __DB_NAME__;" >/dev/null
+    @docker compose -p __PACKAGE_NAME__ exec -T postgres psql -U postgres -c "CREATE DATABASE __DB_NAME__;" >/dev/null
     pnpm run db:migrate
 
 db-generate:

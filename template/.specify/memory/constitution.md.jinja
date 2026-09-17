@@ -13,7 +13,7 @@ Sync Impact Report
 - Follow-up TODOs: none.
 -->
 
-# Webstack Agent Harness Constitution
+# {{ project_name }} Constitution
 
 ## Core Principles
 
@@ -68,7 +68,7 @@ an unfinished slice.
 Stack: Node.js 22 LTS, TypeScript 5, Fastify 5 + TypeBox + Swagger, Drizzle ORM,
 PostgreSQL 16 (tmpfs-backed, ephemeral by design), Vitest, Stryker Mutator, fast-check,
 Schemathesis, Gitleaks, `just` as the task runner. Target environment is WSL2/Linux with
-Docker Compose; the compose project is unified under the name `webstack-agent-harness`
+Docker Compose; the compose project is unified under the name `{{ package_name }}`
 so `db-up`/`db-down`/`db-reset` never collide with other local stacks. Every endpoint
 registered in `src/http/app.ts` MUST declare a TypeBox schema, including its `401`
 contract if it requires auth, or explicit `config: { isPublic: true }` if it does not
@@ -115,7 +115,7 @@ constitution takes precedence and `AGENTS.md` MUST be updated to match.
 Amendments follow semantic versioning: MAJOR for a removed or redefined principle,
 MINOR for a new principle or materially expanded section, PATCH for wording or
 clarification only. Every amendment MUST update `AGENTS.md` and the spec doc
-(`docs/webstack-agent-harness-spec.html`, regenerated via `scripts/generate-pdf.sh`) in
+(`docs/spec.html`, regenerated via `scripts/generate-pdf.sh`) in
 the same change if it affects gates, tiers, or enforcement layers, so the documents
 never drift from each other or from the code. A decision significant enough to need its
 own rationale and consequences — not just a rule — gets an ADR in `docs/adr/` instead of

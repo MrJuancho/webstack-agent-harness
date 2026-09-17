@@ -1,9 +1,8 @@
-node_modules/
-dist/
+# Este .gitignore es para el repo del TEMPLATE en sí (raíz), no para los
+# proyectos que genera -- ese es template/.gitignore, independiente.
 .env
 .env.*
 !.env.example
-coverage/
-.stryker-tmp/
-reports/
+node_modules/
+.DS_Store
 *.log

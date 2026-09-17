@@ -2,38 +2,45 @@
 
 <!--
 Se SOBRESCRIBE, no se acumula. Límite duro: 40 líneas. El historial de qué
-cambió y por qué vive en `git log`, `AGENTS.md` y `docs/adr/` -- no aquí.
+cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 -->
 
 ## En qué quedó la última sesión
 
-Harness reparado, documentado y con verificación de agentes reforzada
-(commits fff6ef9, 5129e51, c42d4d5, + este). Hallazgo crítico corregido y
-sellado en `docs/adr/0001`: `guard-holdouts.sh`/`stop-gate.sh` usaban
-`exit 1`; solo `exit 2` bloquea `PreToolUse`/`Stop` en Claude Code -- ambos
-llevaban sin bloquear nada desde su creación. Verificado en vivo dos veces
-(antes y después del fix) con una edición real sobre el hold-out sellado.
-Agregado desde ahí, mirando a `gauntlet-template` como referencia madura:
-subagentes `generator`/`reviewer` en `.claude/agents/` (con tools
-restringidas de verdad, no solo convención en prosa); regla explícita de
-aislamiento de worktrees para roles de verificación en `AGENTS.md`; hook
-`PostToolUse` (`lint-on-edit.sh`) de feedback rápido de ESLint, falla
-ABIERTO a propósito, documentado junto a la tabla fail-closed/fail-open;
-`docs/adr/` con dos decisiones (exit-2, y clon+`git init` en vez de GitHub
-template); constitución a v1.1.0 (principio VI: presupuesto por tokens, no
-reloj). Spec doc a v1.2, README y `AGENTS.md` actualizados en el mismo
-cambio. `just gauntlet-fast` verde en cada paso.
+Migración completa a Copier (ADR-0003, supera ADR-0002 del día anterior):
+todo el proyecto bajo `template/`, `copier.yml` en la raíz, variables
+`project_name`/`package_name`/`db_name`/`github_owner`. La raíz ya no es un
+proyecto corriendo -- es la gestión del template (`copier.yml`, `docs/adr/`,
+este archivo). Verificado con una corrida REAL de `copier copy` (fuente sin
+`.git`, para evitar el bug de `dunamai` con el tag `v1.0.0-harness`) seguida
+de `just setup` y `just gauntlet` completos en el proyecto generado -- las
+dos veces encontró y forzó a corregir bugs reales que la sola lectura de
+código no hubiera atrapado: `copier copy` no corre `git init` solo (rompía
+`just install-hooks`), y dos scripts de gates tenían nombres de bases de
+datos efímeras hardcodeados con "webstack". Ambos corregidos y
+reverificados en verde. `justfile` deliberadamente sin sufijo `.jinja`
+(colisiona con la sintaxis `{{}}` de `just`) -- ver ADR-0003 para el
+detalle completo de los 5 hallazgos de la migración.
 
 ## Qué sigue
 
-Sin proyecto real encima del harness todavía. Antes de clonar: renombrar
-`webstack-agent-harness`/`webstack_dev` en `package.json`,
-`docker-compose.yml`, badges de `README.md` y el spec doc; resellar
-`tests/holdout/` con invariantes reales. Pendiente, explícitamente fuera de
-alcance por decisión del usuario: **no** atar el aislamiento de worktrees a
-Orca ni a ningún ADE específico -- debe seguir funcionando con `git
-worktree` puro. Aislar Postgres por worktree sigue sin resolver si algún
-día se corren roles de verificación en paralelo de verdad.
+El tag viejo `v1.0.0-harness` (no PEP 440 válido, rompía `dunamai`) se
+resolvió taggeando este mismo commit de migración como `v0.1.0` -- Copier
+encuentra el tag más cercano a HEAD primero, así que `copier copy
+<url-de-github>` ya no debería necesitar `--vcs-ref HEAD` explícito. El tag
+viejo se deja intacto como historia, no se borra.
+
+Sigue sin existir una suite de meta-tests que verifique el mecanismo del
+template en sí (lo que sí tiene `gauntlet-template`) -- la verificación de
+hoy fue manual, una vez. Consecuencia directa, encontrada al intentar
+commitear este mismo cambio: el pre-commit hook local ya no puede correr
+`just gauntlet-fast` (no hay `template/package.json` real, solo
+`.jinja` -- no renderiza sin un `copier copy`), así que quedó como no-op
+honesto. Tampoco existe ya `.claude/settings.json` en la raíz (se movió a
+`template/.claude/`) -- Capa 1 (hooks de agente) no está activa editando
+este repo raíz hasta que se construya un `.claude/` propio para la raíz,
+apuntando a `template/scripts/hooks/*` y a `template/tests/holdout/`. Sin
+proyecto real generado todavía.
 
 ## Bloqueado / pendiente de decisión
 
