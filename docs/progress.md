@@ -7,34 +7,32 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-**Confirmado en vivo, en una sesión nueva:** el `PreToolUse` de la raíz
-(commit ee711c1) bloqueó un intento real de editar
-`template/tests/holdout/...`. Capa 1 de la raíz operativa de punta a
-punta -- el problema de la sesión anterior era exactamente recarga en
-caliente de un `settings.json` nuevo, como se sospechaba, y se resolvió
-solo con la sesión nueva.
+Cerrados los dos hallazgos de la auditoría de Capa 3/4: `.github/workflows/verify-template.yml`
+corre `scripts/verify-template.sh` en cada push/PR (job real, verificado en verde:
+https://github.com/MrJuancho/webstack-agent-harness/actions/runs/35197153660).
+Branch protection activada en `main` con `gh api` -- requiere PR + ese check,
+`enforce_admins: true`. Verificado en vivo dos veces: con
+`enforce_admins: false` un push directo del dueño pasó igual ("Bypassed rule
+violations" -- hallazgo real, no hipotético); con `enforce_admins: true`,
+el mismo tipo de push fue rechazado de verdad (GH006). El flujo PR
+completo (branch → push → PR #1 → check verde → squash merge → delete
+branch) se probó de punta a punta, no solo se configuró.
 
-Segunda pasada de auditoría (misma sesión que confirmó lo anterior):
-verificado con `gh api` que **branch protection en `main` no está
-activo** (404 "Branch not protected") -- Capa 4, documentada en
-`template/AGENTS.md.jinja` como algo que "debe confirmarse periódicamente
-activo", nunca se había confirmado para este repo raíz. Y **no existe
-`.github/workflows/` en la raíz** -- `scripts/verify-template.sh` solo
-corre vía el hook git local (opcional, no instalado por defecto en un
-clon nuevo) o el Stop hook de Claude Code (depende de la sesión); nada lo
-corre en CI. Un push directo o un commit con `--no-verify` puede romper
-el mecanismo del template sin que nada lo atrape.
+Decisión explícita del usuario: en vez de "requerir CI pero permitir push
+directo" (que GitHub no soporta para un commit nuevo -- el check no puede
+existir antes del primer push), se adoptó PR obligatorio para este repo
+raíz. Documentado en README, sección "Workflow: this repo requires PRs".
+**Esto NO aplica a proyectos generados** (`template/` sigue con push
+directo a `main`, como documenta `template/AGENTS.md.jinja`) -- es
+específico de este repo template.
 
 ## Qué sigue
 
-Dos hallazgos sin resolver, del mismo tipo que motivó Layer 1 hoy --
-verificación que existe en la documentación pero no en la práctica:
-
-1. Agregar `.github/workflows/verify-template.yml` en la raíz: instala
-   `copier` y corre `scripts/verify-template.sh` en cada push/PR a `main`.
-2. Activar branch protection en `main` (requiere GitHub Settings, no se
-   puede hacer solo con código) -- posiblemente exigiendo el check de (1)
-   una vez exista.
+Nada pendiente de la auditoría de esta sesión. Sin proyecto real generado
+todavía -- el usuario planea empezarlo mañana. Recordatorio para esa
+sesión: cualquier cambio a ESTE repo (el template) ahora necesita PR, no
+push directo -- ver README. Los cambios dentro de un proyecto YA generado
+siguen sin esa restricción.
 
 ## Bloqueado / pendiente de decisión
 
