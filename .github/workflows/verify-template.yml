@@ -1,0 +1,27 @@
+name: Verify Template
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify-template:
+    name: verify-template.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install copier
+        run: uv tool install copier
+
+      - name: Verify template mechanism
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          bash scripts/verify-template.sh

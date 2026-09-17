@@ -7,37 +7,34 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Cerrada la brecha de Capa 1 que dejó la migración a Copier (commit
-8e3ca9f, v0.1.0). Nuevo `scripts/verify-template.sh`: corre un `copier
-copy` real sobre el working tree actual y falla si el resultado tiene
-regresiones ya conocidas (copy roto, sin `.git`, Jinja sin renderizar,
-"webstack" residual). Verificado en ambas direcciones: detecta una
-regresión inducida a propósito, y pasa en verde en estado limpio.
+**Confirmado en vivo, en una sesión nueva:** el `PreToolUse` de la raíz
+(commit ee711c1) bloqueó un intento real de editar
+`template/tests/holdout/...`. Capa 1 de la raíz operativa de punta a
+punta -- el problema de la sesión anterior era exactamente recarga en
+caliente de un `settings.json` nuevo, como se sospechaba, y se resolvió
+solo con la sesión nueva.
 
-Hallazgo importante durante la construcción: apuntar `copier copy`
-directamente a este repo (con `.git`) NO refleja cambios sin commitear de
-forma confiable -- una tarea `_tasks` marcador nunca corrió estando sin
-commitear, y sí corrió recién al commitear. `verify-template.sh` evita
-esto copiando primero a un directorio sin `.git` (mismo patrón que se usó
-toda la sesión para pruebas manuales).
-
-Root `.claude/settings.json` reinstalado: `PreToolUse` reapunta a
-`template/scripts/hooks/guard-holdouts.sh` (mismo script, protege por
-substring, cubre la nueva ubicación sin cambios), `Stop` corre
-`scripts/verify-template.sh`. **Sin verificar en vivo todavía** -- un
-intento real de editar `template/tests/holdout/...` vía Bash NO fue
-bloqueado (el script en sí sí bloquea, probado en aislamiento; el
-settings.json es nuevo en esta sesión, y a diferencia de un *edit* a un
-settings.json ya existente, Claude Code no parece recargar en caliente un
-archivo que no existía al iniciar la sesión). Pre-commit local
-reinstalado y sí probado (corre en cada commit real de esta sesión).
+Segunda pasada de auditoría (misma sesión que confirmó lo anterior):
+verificado con `gh api` que **branch protection en `main` no está
+activo** (404 "Branch not protected") -- Capa 4, documentada en
+`template/AGENTS.md.jinja` como algo que "debe confirmarse periódicamente
+activo", nunca se había confirmado para este repo raíz. Y **no existe
+`.github/workflows/` en la raíz** -- `scripts/verify-template.sh` solo
+corre vía el hook git local (opcional, no instalado por defecto en un
+clon nuevo) o el Stop hook de Claude Code (depende de la sesión); nada lo
+corre en CI. Un push directo o un commit con `--no-verify` puede romper
+el mecanismo del template sin que nada lo atrape.
 
 ## Qué sigue
 
-**Confirmar en una sesión nueva** que el hook `PreToolUse`/`Stop` de la
-raíz sí bloquea en vivo (reintentar el mismo experimento: editar
-`template/tests/holdout/...`). Si sigue sin bloquear, el problema no es
-de recarga en caliente sino algo más -- investigar entonces.
+Dos hallazgos sin resolver, del mismo tipo que motivó Layer 1 hoy --
+verificación que existe en la documentación pero no en la práctica:
+
+1. Agregar `.github/workflows/verify-template.yml` en la raíz: instala
+   `copier` y corre `scripts/verify-template.sh` en cada push/PR a `main`.
+2. Activar branch protection en `main` (requiere GitHub Settings, no se
+   puede hacer solo con código) -- posiblemente exigiendo el check de (1)
+   una vez exista.
 
 ## Bloqueado / pendiente de decisión
 
