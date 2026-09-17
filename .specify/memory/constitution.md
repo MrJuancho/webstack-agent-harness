@@ -1,13 +1,16 @@
 <!--
 Sync Impact Report
-- Version change: [TEMPLATE] → 1.0.0 (initial ratification)
-- Modified principles: n/a (first concrete draft, replacing bracketed placeholders)
-- Added sections: Core Principles (I-V), Technology & Environment Constraints,
-  Enforcement & Roles, Governance
+- Version change: 1.0.0 → 1.1.0
+- Modified principles: none renamed/removed
+- Added sections: Core Principles VI (Slice Discipline: Budget by Tokens, Not Clock
+  Time); Enforcement & Roles expanded with PostToolUse fast-feedback hook and the
+  fail-closed/fail-open classification; Governance expanded to cover docs/adr/ and
+  docs/progress.md
 - Removed sections: none
-- Derived from: AGENTS.md, justfile, .claude/settings.json, .github/workflows/ci.yml
-  (existing repo state as of 2026-09-16); no prior constitution existed.
-- Follow-up TODOs: none — all placeholders resolved from repo context.
+- Derived from: this session's live-verified fix of the PreToolUse/Stop exit-code bug
+  (docs/adr/0001), the new generator/reviewer subagents (.claude/agents/), and
+  gauntlet-template's ADR-0002 (token budget, not clock time) adapted to this stack.
+- Follow-up TODOs: none.
 -->
 
 # Webstack Agent Harness Constitution
@@ -50,6 +53,16 @@ agent MUST NOT weaken, delete, or work around a hold-out assertion to force a pa
 closed on any byte-level change (Gate 5). Only a human, via `just seal-holdouts`, may
 update the signature after a deliberate, reviewed change to that suite.
 
+### VI. Slice Discipline: Budget by Tokens, Not Clock Time
+A task statement that, read literally, implies more than one red test is not one task —
+it is several, and MUST be split (via `/speckit-plan`/`/speckit-tasks`) before work
+starts, not mid-session once the context budget is already spent. The real budget of an
+agent session is tokens consumed, not wall-clock time; a short-looking task that hides
+several unsplit slices can exhaust a session's entire budget while a properly sliced
+multi-session feature costs a fraction of it. Each slice MUST close with a green `just
+gauntlet` before the next one starts — an unfinished slice is not deferred debt, it is
+an unfinished slice.
+
 ## Technology & Environment Constraints
 
 Stack: Node.js 22 LTS, TypeScript 5, Fastify 5 + TypeBox + Swagger, Drizzle ORM,
@@ -65,7 +78,13 @@ contract if it requires auth, or explicit `config: { isPublic: true }` if it doe
 
 Enforcement is layered and independent — no single disabled layer removes the others:
 1. **Agent hooks** (`.claude/settings.json`): `PreToolUse` blocks hold-out tampering;
-   `Stop` blocks ending a turn while `gauntlet-fast` is red.
+   `Stop` blocks ending a turn while `gauntlet-fast` is red; `PostToolUse` gives fast
+   ESLint feedback per edited file. Security hooks (`PreToolUse`, `Stop`) MUST fail
+   CLOSED (exit 2 on Claude Code, the only code that blocks those events); convenience
+   hooks (`PostToolUse`) MUST fail OPEN — a missing dependency silences feedback, it
+   never blocks an edit that already happened. See `AGENTS.md` for the full
+   classification table and `docs/adr/0001-hooks-de-seguridad-usan-exit-2.md` for the
+   incident that established this rule.
 2. **Git pre-commit** (`scripts/hooks/pre-commit.sh`, installed via `just install-hooks`):
    runs `gauntlet-fast` before any local commit. It MUST be installed by `just setup` on
    every fresh clone — it is not assumed to already exist.
@@ -74,24 +93,32 @@ Enforcement is layered and independent — no single disabled layer removes the 
 4. **Branch protection**: `main` requires the CI check green before merge. This layer is
    configured in GitHub settings, not in code, and MUST be periodically confirmed active.
 
-Two operational roles keep concurrent work isolated: **Generator** works at the repo
-root on a feature branch, running `gauntlet-fast` continuously and committing only on a
-green `gauntlet`. **Reviewer** never inspects code in the Generator's working tree — it
-uses `just review-start <branch>` to get an isolated git worktree, and `just
-review-clean` to tear it down.
+Two operational roles keep concurrent work isolated, codified as Claude Code subagents
+in `.claude/agents/`: **Generator** (`generator.md`) is the only role with `Edit`/`Write`
+— it works at the repo root on a feature branch, running `gauntlet-fast` continuously
+and committing only on a green `gauntlet`. **Reviewer** (`reviewer.md`) has no
+`Edit`/`Write` and never inspects code in the Generator's working tree while it may be
+changing — it uses `just review-start <branch>` to get an isolated git worktree, and
+`just review-clean` to tear it down. A Reviewer invocation MUST receive only the diff
+(a commit range, `git diff`, or file paths), never the conversation that produced it —
+a reviewer that inherits the author's context inherits the author's blind spots.
 
 ## Governance
 
 This constitution defines the *why*; `AGENTS.md` defines the *how* (exact commands, gate
-descriptions, and the operational checklist an agent follows turn-to-turn). Where the
-two conflict, this constitution takes precedence and `AGENTS.md` MUST be updated to
-match.
+descriptions, and the operational checklist an agent follows turn-to-turn);
+`docs/progress.md` defines *where things stand right now* (overwritten each session,
+never accumulated); `docs/adr/` defines *why a specific decision was made*, dated and
+immutable once accepted. Where the constitution and `AGENTS.md` conflict, this
+constitution takes precedence and `AGENTS.md` MUST be updated to match.
 
 Amendments follow semantic versioning: MAJOR for a removed or redefined principle,
 MINOR for a new principle or materially expanded section, PATCH for wording or
 clarification only. Every amendment MUST update `AGENTS.md` and the spec doc
 (`docs/webstack-agent-harness-spec.html`, regenerated via `scripts/generate-pdf.sh`) in
-the same change if it affects gates, tiers, or enforcement layers, so the three
-documents never drift from each other or from the code.
+the same change if it affects gates, tiers, or enforcement layers, so the documents
+never drift from each other or from the code. A decision significant enough to need its
+own rationale and consequences — not just a rule — gets an ADR in `docs/adr/` instead of
+(or in addition to) a constitution edit.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-12 | **Last Amended**: 2026-09-16
+**Version**: 1.1.0 | **Ratified**: 2026-09-12 | **Last Amended**: 2026-09-16

@@ -47,7 +47,7 @@
 
   <!-- PORTADA -->
   <div class="cover">
-    <span class="badge">SPECIFICATION V1.1 • FAIL-CLOSED</span>
+    <span class="badge">SPECIFICATION V1.2 • FAIL-CLOSED</span>
     <h1>Webstack Agent Harness</h1>
     <div class="subtitle">Arnés de Ingeniería de Software para Desarrollo Guiado por Agentes Autónomos</div>
     <p><strong>Stack Tecnológico:</strong> Node.js 22 LTS, TypeScript 5, Fastify, TypeBox, Drizzle ORM, PostgreSQL 16 (tmpfs), Vitest, Stryker Mutator, fast-check, Schemathesis, Gitleaks.</p>
@@ -136,7 +136,11 @@
   <p>Los 8 gates definen <em>qué</em> se verifica; las capas de enforcement definen <em>cuándo y quién</em> no puede saltárselo. Cada capa es independiente de las demás: un agente que desactive una no invalida las otras tres.</p>
 
   <h3>Capa 1: Hooks del Agente (<code>.claude/settings.json</code>)</h3>
-  <p><code>PreToolUse</code> intercepta cada llamada a herramienta del agente antes de ejecutarse (<code>scripts/hooks/guard-holdouts.sh</code>) y bloquea cualquier escritura o borrado sobre <code>tests/holdout/</code> o <code>.holdout.sha256</code>. Si el payload de entrada no es JSON parseable, el hook falla cerrado de inmediato en vez de asumir que la llamada es inofensiva. <code>Stop</code> (<code>scripts/hooks/stop-gate.sh</code>) impide que el agente declare terminado un turno si <code>just gauntlet-fast</code> no sale en verde.</p>
+  <p><code>PreToolUse</code> intercepta cada llamada a herramienta del agente antes de ejecutarse (<code>scripts/hooks/guard-holdouts.sh</code>) y bloquea cualquier escritura o borrado sobre <code>tests/holdout/</code> o <code>.holdout.sha256</code>. Si el payload de entrada no es JSON parseable, el hook falla cerrado de inmediato en vez de asumir que la llamada es inofensiva. <code>Stop</code> (<code>scripts/hooks/stop-gate.sh</code>) impide que el agente declare terminado un turno si <code>just gauntlet-fast</code> no sale en verde. <code>PostToolUse</code> (<code>scripts/hooks/lint-on-edit.sh</code>) da feedback rápido de ESLint tras cada <code>Edit</code>/<code>Write</code> sobre un <code>.ts</code>, sin bloquear nada.</p>
+
+  <div class="callout callout-warn">
+    <strong>Solo <code>exit 2</code> bloquea <code>PreToolUse</code>/<code>Stop</code> en Claude Code.</strong> Los dos hooks de seguridad de este harness usaron <code>exit 1</code> desde su creación hasta que se detectó y corrigió en una sesión posterior (ver <code>docs/adr/0001-hooks-de-seguridad-usan-exit-2.md</code>) — no bloqueaban nada, pese a que el código parecía correcto. Los hooks de <strong>seguridad</strong> (<code>PreToolUse</code>, <code>Stop</code>) fallan CERRADO; los de <strong>conveniencia</strong> (<code>PostToolUse</code>) fallan ABIERTO. Ver <code>AGENTS.md</code> para la tabla completa de clasificación.
+  </div>
 
   <h3>Capa 2: Git Pre-Commit Hook</h3>
   <p>Ejecuta <code>just gauntlet-fast</code> antes de registrar cualquier commit local. Como <code>.git/hooks/</code> nunca se versiona, el hook se define en <code>scripts/hooks/pre-commit.sh</code> y se instala en cada clon nuevo mediante <code>just install-hooks</code> (incluido en <code>just setup</code>), de modo que la Capa 2 no dependa de la máquina donde se generó el repositorio.</p>
@@ -152,13 +156,20 @@
   <h2>4. Topología de Archivos y Componentes del Sistema</h2>
   <pre>
 .
-├── .claude/settings.json           # Hooks de agente: PreToolUse (Capa 1) y Stop
+├── .claude/
+│   ├── agents/
+│   │   ├── generator.md            # Subagente: único rol con Edit/Write
+│   │   └── reviewer.md             # Subagente: revisa diffs con contexto limpio, sin Edit/Write
+│   └── settings.json                # Hooks de agente: PreToolUse, Stop, PostToolUse (Capa 1)
 ├── .dependency-cruiser.js          # Reglas de aislamiento hexagonal de capas
 ├── .env.example                    # Plantilla de variables de entorno
 ├── .github/workflows/ci.yml        # Pipeline CI: doctor + gauntlet-full (Capa 3)
 ├── .holdout.sha256                 # Sello criptográfico SHA-256 de invariantes (Gate 5)
 ├── AGENTS.md                       # Protocolo operativo para agentes autónomos
 ├── docker-compose.yml              # PostgreSQL 16 con data montada en tmpfs (RAM)
+├── docs/
+│   ├── adr/                        # Decisiones arquitectónicas: contexto + consecuencias
+│   └── progress.md                 # Handoff entre sesiones (se sobrescribe, no se acumula)
 ├── drizzle.config.ts               # Configuración de Drizzle Kit
 ├── justfile                        # Orquestador declarativo: setup, doctor, niveles 1-4
 ├── package.json                    # Scripts npm y dependencias estrictas
@@ -167,6 +178,7 @@
 │   ├── hooks/
 │   │   ├── guard-holdouts.sh       # PreToolUse: bloquea escritura sobre hold-outs (Capa 1)
 │   │   ├── stop-gate.sh            # Stop: exige gauntlet-fast en verde (Capa 1)
+│   │   ├── lint-on-edit.sh         # PostToolUse: feedback rápido de ESLint (falla abierto)
 │   │   └── pre-commit.sh           # Fuente versionada del git hook (Capa 2)
 │   ├── mutate-diff.sh              # Stryker enfocado exclusivamente en diff git vs main
 │   ├── test-contracts.sh           # Levantamiento de Fastify + Fuzzing Schemathesis (Gate 3)

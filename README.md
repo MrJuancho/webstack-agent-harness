@@ -8,9 +8,12 @@ enforcement, and a tiered `just` command set, so an agent can iterate fast witho
 being able to quietly fake a passing state.
 
 If you're an agent working in this repo, read [`AGENTS.md`](./AGENTS.md) first — it's
-the operational protocol you're expected to follow. Humans should read
+the operational protocol you're expected to follow, and it points to
+[`docs/progress.md`](./docs/progress.md) (what the last session left, overwritten each
+session) so you don't have to re-derive state from scratch. Humans should read
 [`.specify/memory/constitution.md`](./.specify/memory/constitution.md) for the *why*
-behind the rules, and the full spec at
+behind the rules, [`docs/adr/`](./docs/adr/) for specific decisions and their rationale,
+and the full spec at
 [`docs/webstack-agent-harness-spec.html`](./docs/webstack-agent-harness-spec.html) (also
 available as a [PDF](./docs/webstack-agent-harness-spec.pdf)) for the complete reference.
 
@@ -44,7 +47,9 @@ A gate only matters if an agent can't route around it. Four independent layers m
 sure of that:
 
 1. **Agent hooks** (`.claude/settings.json`) — block writes to the hold-out test suite,
-   and block ending a turn on a red `gauntlet-fast`.
+   block ending a turn on a red `gauntlet-fast`, and give fast (non-blocking) lint
+   feedback per edited file. The two security hooks fail *closed*; the feedback hook
+   fails *open* — see `AGENTS.md` for the classification and why it matters.
 2. **Git pre-commit** (`scripts/hooks/pre-commit.sh`, installed via `just install-hooks`)
    — runs `gauntlet-fast` before any local commit.
 3. **CI** (`.github/workflows/ci.yml`) — runs `just doctor` + `just gauntlet-full` on a
@@ -75,8 +80,13 @@ The gauntlet still enforces *how well* the result is built; spec-kit just makes 
 
 ```
 .
-├── .claude/settings.json    # Agent hooks (Layer 1)
-├── .specify/                # Spec-kit templates, scripts, and the constitution
+├── .claude/
+│   ├── agents/               # generator.md, reviewer.md — Claude Code subagents
+│   └── settings.json         # Agent hooks (Layer 1)
+├── .specify/                 # Spec-kit templates, scripts, and the constitution
+├── docs/
+│   ├── adr/                  # Architecture decisions: context + consequences
+│   └── progress.md           # Session handoff — overwritten, not accumulated
 ├── scripts/
 │   ├── doctor.sh            # Fail-closed tooling check
 │   ├── hooks/                # Agent + git hooks (Layers 1-2)
@@ -96,11 +106,15 @@ The gauntlet still enforces *how well* the result is built; spec-kit just makes 
 
 ## Roles for concurrent work
 
-- **Generator** — works at the repo root on a feature branch, running
-  `gauntlet-fast` continuously.
-- **Reviewer** — never inspects code in the Generator's working tree; uses
-  `just review-start <branch>` for an isolated git worktree and `just review-clean`
-  to tear it down.
+Codified as Claude Code subagents in `.claude/agents/`:
+
+- **Generator** (`generator.md`) — the only role with `Edit`/`Write`. Works at the repo
+  root on a feature branch, running `gauntlet-fast` continuously.
+- **Reviewer** (`reviewer.md`) — no `Edit`/`Write`; reviews a diff with a clean context
+  (never the conversation that produced it). Never inspects code in a tree another
+  process might be modifying — uses `just review-start <branch>` for an isolated git
+  worktree and `just review-clean` to tear it down. This is plain `git worktree`, not
+  tied to any particular IDE or agent-orchestration tool.
 
 See [`AGENTS.md`](./AGENTS.md#4-roles-operativos-y-aislamiento-con-git-worktrees) for
 the full protocol.
