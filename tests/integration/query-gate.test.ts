@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { db, sqlClient } from '../../src/infra/db/client.js';
+import { db } from '../../src/infra/db/client.js';
 import { auditLogs } from '../../src/infra/db/schema.js';
 import { assertMaxQueries } from '../helpers/query-counter.js';
 import { inArray, eq } from 'drizzle-orm';
@@ -8,17 +8,8 @@ describe('Gate 6: Detección de Consultas N+1 e Integración con DB', () => {
   const createdIds: string[] = [];
 
   beforeAll(async () => {
-    // 1. Asegurar que la tabla exista aplicando las migraciones pendientes
-    await sqlClient`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        action TEXT NOT NULL,
-        entity TEXT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `;
-
-    // 2. Sembrar registros de prueba en lote (1 sola consulta)
+    // Las migraciones ya corrieron (just gauntlet -> pnpm run db:migrate);
+    // aquí solo sembramos datos de prueba en lote (1 sola consulta)
     const inserted = await db
       .insert(auditLogs)
       .values([

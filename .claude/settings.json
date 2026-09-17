@@ -3,12 +3,16 @@
     "PreToolUse": [
       {
         "matcher": "*",
-        "command": "bash scripts/hooks/guard-holdouts.sh"
+        "hooks": [
+          { "type": "command", "command": "bash scripts/hooks/guard-holdouts.sh" }
+        ]
       }
     ],
     "Stop": [
       {
-        "command": "bash scripts/hooks/stop-gate.sh"
+        "hooks": [
+          { "type": "command", "command": "bash scripts/hooks/stop-gate.sh" }
+        ]
       }
     ]
   }

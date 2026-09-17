@@ -3,6 +3,21 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
+# Inicialización determinista del entorno para nuevos clones o agentes
+setup:
+    just doctor
+    pnpm install --frozen-lockfile
+    just install-hooks
+    just db-reset
+    just gauntlet
+    @echo "✔ Entorno completamente inicializado y verificado en verde."
+
+# Instala el git pre-commit hook (Capa 2) en este clon local
+install-hooks:
+    cp scripts/hooks/pre-commit.sh .git/hooks/pre-commit
+    chmod +x .git/hooks/pre-commit
+    @echo "✔ Pre-commit hook instalado (Capa 2 activa)."
+
 # Diagnóstico fail-closed de herramientas
 doctor:
     bash scripts/doctor.sh
@@ -20,6 +35,7 @@ gauntlet-fast:
 gauntlet: gauntlet-fast
     pnpm run lint:arch
     just db-up
+    pnpm run db:migrate
     just db-drift-check
     just db-migrate-reversible
     pnpm exec vitest run tests/architecture
@@ -44,6 +60,12 @@ db-up:
 
 db-down:
     docker compose -p webstack-agent-harness down
+
+db-reset:
+    just db-up
+    @docker compose -p webstack-agent-harness exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS webstack_dev;" >/dev/null
+    @docker compose -p webstack-agent-harness exec -T postgres psql -U postgres -c "CREATE DATABASE webstack_dev;" >/dev/null
+    pnpm run db:migrate
 
 db-generate:
     pnpm exec drizzle-kit generate
