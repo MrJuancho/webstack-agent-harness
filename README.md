@@ -57,10 +57,36 @@ template would try to resolve `{{BRANCH}}` as a missing Copier variable and fail
 copied literally instead, and its two real substitutions (`__PACKAGE_NAME__`,
 `__DB_NAME__`) are resolved with `sed` in `copier.yml`'s `_tasks`, after copying.
 
-## What's deliberately not here yet
+## Maintaining this template
 
-There's no automated test suite verifying the template mechanism itself (that
-`copier copy` reliably produces a project where `just gauntlet` passes) — verified
-manually once per change instead. If this template starts changing often enough for
-that manual check to become a bottleneck, that's worth revisiting; see
-`docs/progress.md` for current status.
+[`scripts/verify-template.sh`](./scripts/verify-template.sh) runs a real `copier copy`
+against the current working tree (including uncommitted changes) and checks for the
+specific regressions this template has actually hit: a failed copy, a missing `.git/`
+in the output, leftover unrendered `{{ }}` Jinja markers, or a stray `webstack`
+reference that should have been generalized. It does **not** install dependencies or
+run the example app's own `just gauntlet` — that needs Docker and a few minutes, too
+slow for every turn or every commit. See
+[`docs/adr/0003-migracion-a-copier-template.md`](./docs/adr/0003-migracion-a-copier-template.md)
+for why it's built this way (a plain local `copier copy` against this repo's own
+`.git` turned out to *not* reliably reflect uncommitted edits — it copies to a
+git-free scratch directory first specifically to avoid that).
+
+To install the git pre-commit hook (runs `verify-template.sh` before every commit):
+
+```bash
+cp scripts/hooks/pre-commit.sh .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+Claude Code agent hooks (`.claude/settings.json`) mirror the same idea: `PreToolUse`
+still blocks writes to `template/tests/holdout/` and `template/.holdout.sha256`
+(unmodified — the existing guard matches on path substring, so it already covers the
+new location), and `Stop` runs `verify-template.sh` before a turn can end. Both were
+added after `.claude/` had already moved into `template/` mid-session, so — unlike an
+edit to an existing settings file, which hot-reloads — a session needs to be
+**restarted** to pick up a settings.json that didn't exist at session start.
+
+There's no meta-test suite beyond this (what `gauntlet-template` has, with its own
+`pyproject.toml`/`pytest` at the root) — `verify-template.sh` is a fast mechanism-level
+check, not full coverage. Worth building if this template starts changing often enough
+for that gap to matter; see `docs/progress.md` for current status.

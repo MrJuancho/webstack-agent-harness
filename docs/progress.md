@@ -7,40 +7,37 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Migración completa a Copier (ADR-0003, supera ADR-0002 del día anterior):
-todo el proyecto bajo `template/`, `copier.yml` en la raíz, variables
-`project_name`/`package_name`/`db_name`/`github_owner`. La raíz ya no es un
-proyecto corriendo -- es la gestión del template (`copier.yml`, `docs/adr/`,
-este archivo). Verificado con una corrida REAL de `copier copy` (fuente sin
-`.git`, para evitar el bug de `dunamai` con el tag `v1.0.0-harness`) seguida
-de `just setup` y `just gauntlet` completos en el proyecto generado -- las
-dos veces encontró y forzó a corregir bugs reales que la sola lectura de
-código no hubiera atrapado: `copier copy` no corre `git init` solo (rompía
-`just install-hooks`), y dos scripts de gates tenían nombres de bases de
-datos efímeras hardcodeados con "webstack". Ambos corregidos y
-reverificados en verde. `justfile` deliberadamente sin sufijo `.jinja`
-(colisiona con la sintaxis `{{}}` de `just`) -- ver ADR-0003 para el
-detalle completo de los 5 hallazgos de la migración.
+Cerrada la brecha de Capa 1 que dejó la migración a Copier (commit
+8e3ca9f, v0.1.0). Nuevo `scripts/verify-template.sh`: corre un `copier
+copy` real sobre el working tree actual y falla si el resultado tiene
+regresiones ya conocidas (copy roto, sin `.git`, Jinja sin renderizar,
+"webstack" residual). Verificado en ambas direcciones: detecta una
+regresión inducida a propósito, y pasa en verde en estado limpio.
+
+Hallazgo importante durante la construcción: apuntar `copier copy`
+directamente a este repo (con `.git`) NO refleja cambios sin commitear de
+forma confiable -- una tarea `_tasks` marcador nunca corrió estando sin
+commitear, y sí corrió recién al commitear. `verify-template.sh` evita
+esto copiando primero a un directorio sin `.git` (mismo patrón que se usó
+toda la sesión para pruebas manuales).
+
+Root `.claude/settings.json` reinstalado: `PreToolUse` reapunta a
+`template/scripts/hooks/guard-holdouts.sh` (mismo script, protege por
+substring, cubre la nueva ubicación sin cambios), `Stop` corre
+`scripts/verify-template.sh`. **Sin verificar en vivo todavía** -- un
+intento real de editar `template/tests/holdout/...` vía Bash NO fue
+bloqueado (el script en sí sí bloquea, probado en aislamiento; el
+settings.json es nuevo en esta sesión, y a diferencia de un *edit* a un
+settings.json ya existente, Claude Code no parece recargar en caliente un
+archivo que no existía al iniciar la sesión). Pre-commit local
+reinstalado y sí probado (corre en cada commit real de esta sesión).
 
 ## Qué sigue
 
-El tag viejo `v1.0.0-harness` (no PEP 440 válido, rompía `dunamai`) se
-resolvió taggeando este mismo commit de migración como `v0.1.0` -- Copier
-encuentra el tag más cercano a HEAD primero, así que `copier copy
-<url-de-github>` ya no debería necesitar `--vcs-ref HEAD` explícito. El tag
-viejo se deja intacto como historia, no se borra.
-
-Sigue sin existir una suite de meta-tests que verifique el mecanismo del
-template en sí (lo que sí tiene `gauntlet-template`) -- la verificación de
-hoy fue manual, una vez. Consecuencia directa, encontrada al intentar
-commitear este mismo cambio: el pre-commit hook local ya no puede correr
-`just gauntlet-fast` (no hay `template/package.json` real, solo
-`.jinja` -- no renderiza sin un `copier copy`), así que quedó como no-op
-honesto. Tampoco existe ya `.claude/settings.json` en la raíz (se movió a
-`template/.claude/`) -- Capa 1 (hooks de agente) no está activa editando
-este repo raíz hasta que se construya un `.claude/` propio para la raíz,
-apuntando a `template/scripts/hooks/*` y a `template/tests/holdout/`. Sin
-proyecto real generado todavía.
+**Confirmar en una sesión nueva** que el hook `PreToolUse`/`Stop` de la
+raíz sí bloquea en vivo (reintentar el mismo experimento: editar
+`template/tests/holdout/...`). Si sigue sin bloquear, el problema no es
+de recarga en caliente sino algo más -- investigar entonces.
 
 ## Bloqueado / pendiente de decisión
 
