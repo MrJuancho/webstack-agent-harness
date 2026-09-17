@@ -1,0 +1,106 @@
+# Webstack Agent Harness
+
+![CI](https://github.com/MrJuancho/webstack-agent-harness/actions/workflows/ci.yml/badge.svg)
+
+A fail-closed engineering harness for software built by autonomous coding agents. It
+doesn't ship a product — it ships the guardrails: 8 verification gates, 4 layers of
+enforcement, and a tiered `just` command set, so an agent can iterate fast without ever
+being able to quietly fake a passing state.
+
+If you're an agent working in this repo, read [`AGENTS.md`](./AGENTS.md) first — it's
+the operational protocol you're expected to follow. Humans should read
+[`.specify/memory/constitution.md`](./.specify/memory/constitution.md) for the *why*
+behind the rules, and the full spec at
+[`docs/webstack-agent-harness-spec.html`](./docs/webstack-agent-harness-spec.html) (also
+available as a [PDF](./docs/webstack-agent-harness-spec.pdf)) for the complete reference.
+
+## Quick start
+
+```bash
+just setup
+```
+
+This bootstraps a fresh clone end-to-end: checks required tooling (`just doctor`),
+installs dependencies, installs the git pre-commit hook, resets the dev database, and
+runs the Level 2 gauntlet to confirm everything is green.
+
+Requires: Node.js 22+, pnpm, Docker, `just`, Gitleaks, `jq`, `curl`.
+
+## The verification tiers
+
+| Tier | Command | When | Scope |
+|---|---|---|---|
+| 1 | `just gauntlet-fast` | after every file edit | typecheck, lint, unit tests, staged-secret scan |
+| 2 | `just gauntlet` | before every commit | architecture isolation, schema drift, reversible migrations, auth matrix, N+1 detection |
+| 3 | `just gauntlet-full` | before merge/PR | property tests, OpenAPI contract fuzzing, seed determinism, hold-out integrity, diff mutation |
+| 4 | `just audit` | scheduled | full-domain mutation testing |
+
+Each tier includes everything in the tier below it. Details on all 8 gates live in
+[`AGENTS.md`](./AGENTS.md#2-los-8-gates-de-seguridad).
+
+## Enforcement, not just checks
+
+A gate only matters if an agent can't route around it. Four independent layers make
+sure of that:
+
+1. **Agent hooks** (`.claude/settings.json`) — block writes to the hold-out test suite,
+   and block ending a turn on a red `gauntlet-fast`.
+2. **Git pre-commit** (`scripts/hooks/pre-commit.sh`, installed via `just install-hooks`)
+   — runs `gauntlet-fast` before any local commit.
+3. **CI** (`.github/workflows/ci.yml`) — runs `just doctor` + `just gauntlet-full` on a
+   clean container for every push/PR to `main`.
+4. **Branch protection** — `main` requires the CI check green before merge.
+
+## Spec-driven development
+
+This repo uses [spec-kit](https://github.com/github/spec-kit) to plan features before
+an agent implements them, so intent survives a dead session or a switch between agents
+— write it to a file, not just to chat. Available skills:
+
+| Command | Purpose |
+|---|---|
+| `/speckit-constitution` | Establish or amend project principles |
+| `/speckit-specify` | Write a baseline feature specification |
+| `/speckit-clarify` | *(optional)* De-risk ambiguous areas before planning |
+| `/speckit-plan` | Turn a spec into an implementation plan |
+| `/speckit-tasks` | Break a plan into actionable tasks |
+| `/speckit-analyze` | *(optional)* Cross-check spec/plan/tasks for consistency |
+| `/speckit-implement` | Execute the planned tasks |
+| `/speckit-converge` | Assess the codebase and append remaining work as tasks |
+
+The gauntlet still enforces *how well* the result is built; spec-kit just makes sure
+*what to build* isn't only ever said out loud.
+
+## Project structure
+
+```
+.
+├── .claude/settings.json    # Agent hooks (Layer 1)
+├── .specify/                # Spec-kit templates, scripts, and the constitution
+├── scripts/
+│   ├── doctor.sh            # Fail-closed tooling check
+│   ├── hooks/                # Agent + git hooks (Layers 1-2)
+│   └── test-*.sh             # Individual gate implementations
+├── src/
+│   ├── domain/               # Pure business logic (no infra/http imports)
+│   ├── http/                  # Fastify app + routes
+│   └── infra/db/             # Drizzle schema, migrations, client
+├── tests/
+│   ├── architecture/          # Gate 4: auth matrix
+│   ├── holdout/                # Gate 5: sealed security invariants
+│   ├── integration/            # Gate 6: N+1 detection
+│   ├── property/                 # fast-check property tests
+│   └── unit/
+└── justfile                    # Task orchestration for all tiers
+```
+
+## Roles for concurrent work
+
+- **Generator** — works at the repo root on a feature branch, running
+  `gauntlet-fast` continuously.
+- **Reviewer** — never inspects code in the Generator's working tree; uses
+  `just review-start <branch>` for an isolated git worktree and `just review-clean`
+  to tear it down.
+
+See [`AGENTS.md`](./AGENTS.md#4-roles-operativos-y-aislamiento-con-git-worktrees) for
+the full protocol.

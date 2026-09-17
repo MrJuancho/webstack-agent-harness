@@ -55,7 +55,7 @@ cat << 'HTMLEOF' > "$HTML_OUT"
 
   <!-- PORTADA -->
   <div class="cover">
-    <span class="badge">SPECIFICATION V1.0 • FAIL-CLOSED</span>
+    <span class="badge">SPECIFICATION V1.1 • FAIL-CLOSED</span>
     <h1>Webstack Agent Harness</h1>
     <div class="subtitle">Arnés de Ingeniería de Software para Desarrollo Guiado por Agentes Autónomos</div>
     <p><strong>Stack Tecnológico:</strong> Node.js 22 LTS, TypeScript 5, Fastify, TypeBox, Drizzle ORM, PostgreSQL 16 (tmpfs), Vitest, Stryker Mutator, fast-check, Schemathesis, Gitleaks.</p>
@@ -136,21 +136,46 @@ cat << 'HTMLEOF' > "$HTML_OUT"
   <p>Garantiza que la base de datos de desarrollo y testing sea reproducible bit a bit. El script <code>scripts/test-seed-determinism.sh</code> siembra dos bases de datos efímeras independientes y calcula el SHA-256 de las sentencias <code>INSERT</code> extraídas mediante <code>pg_dump</code>. Prohíbe identificadores aleatorios o fechas dinámicas (<code>Date.now()</code>).</p>
 
   <h3>Gate 8: Prevención de Fuga de Credenciales</h3>
-  <p>Integrado directamente en <code>gauntlet-fast</code>. Evalúa cada commit contra Gitleaks (<code>gitleaks protect --staged</code>). Si se detectan tokens de AWS, claves privadas o JWTs en el área de preparación, el hook aborta antes de ejecutar el transpilador.</p>
+  <p>Integrado directamente en <code>gauntlet-fast</code>. Evalúa cada commit contra Gitleaks (<code>gitleaks protect --staged</code>). Si se detectan tokens de AWS, claves privadas o JWTs en el área de preparación, el hook aborta antes de ejecutar el transpilador. En CI, <code>gitleaks-action</code> corre de forma independiente sobre el historial completo (push) o el rango exacto del PR (pull_request), por lo que la cobertura real de este gate no depende del área de staging vacía de un checkout limpio.</p>
 
   <!-- SECCIÓN 3 -->
   <div class="page-break"></div>
-  <h2>3. Topología de Archivos y Componentes del Sistema</h2>
+  <h2>3. Las 4 Capas de Enforcement</h2>
+  <p>Los 8 gates definen <em>qué</em> se verifica; las capas de enforcement definen <em>cuándo y quién</em> no puede saltárselo. Cada capa es independiente de las demás: un agente que desactive una no invalida las otras tres.</p>
+
+  <h3>Capa 1: Hooks del Agente (<code>.claude/settings.json</code>)</h3>
+  <p><code>PreToolUse</code> intercepta cada llamada a herramienta del agente antes de ejecutarse (<code>scripts/hooks/guard-holdouts.sh</code>) y bloquea cualquier escritura o borrado sobre <code>tests/holdout/</code> o <code>.holdout.sha256</code>. Si el payload de entrada no es JSON parseable, el hook falla cerrado de inmediato en vez de asumir que la llamada es inofensiva. <code>Stop</code> (<code>scripts/hooks/stop-gate.sh</code>) impide que el agente declare terminado un turno si <code>just gauntlet-fast</code> no sale en verde.</p>
+
+  <h3>Capa 2: Git Pre-Commit Hook</h3>
+  <p>Ejecuta <code>just gauntlet-fast</code> antes de registrar cualquier commit local. Como <code>.git/hooks/</code> nunca se versiona, el hook se define en <code>scripts/hooks/pre-commit.sh</code> y se instala en cada clon nuevo mediante <code>just install-hooks</code> (incluido en <code>just setup</code>), de modo que la Capa 2 no dependa de la máquina donde se generó el repositorio.</p>
+
+  <h3>Capa 3: CI / GitHub Actions</h3>
+  <p><code>.github/workflows/ci.yml</code> corre en cada push o PR contra <code>main</code>: instala dependencias con lockfile congelado, ejecuta <code>just doctor</code> para fallar cerrado ante herramientas ausentes, y luego <code>just gauntlet-full</code> (Nivel 3 completo) en un contenedor limpio, sin estado previo del agente.</p>
+
+  <h3>Capa 4: Branch Protection</h3>
+  <p>La rama <code>main</code> exige que el check <em>Level 3 Pre-Merge Gate</em> de la Capa 3 pase en verde antes de autorizar el merge. Esta capa se configura en GitHub (Settings → Branches) y no vive en el repositorio como código; debe verificarse manualmente que siga activa.</p>
+
+  <!-- SECCIÓN 4 -->
+  <div class="page-break"></div>
+  <h2>4. Topología de Archivos y Componentes del Sistema</h2>
   <pre>
 .
+├── .claude/settings.json           # Hooks de agente: PreToolUse (Capa 1) y Stop
 ├── .dependency-cruiser.js          # Reglas de aislamiento hexagonal de capas
 ├── .env.example                    # Plantilla de variables de entorno
+├── .github/workflows/ci.yml        # Pipeline CI: doctor + gauntlet-full (Capa 3)
 ├── .holdout.sha256                 # Sello criptográfico SHA-256 de invariantes (Gate 5)
+├── AGENTS.md                       # Protocolo operativo para agentes autónomos
 ├── docker-compose.yml              # PostgreSQL 16 con data montada en tmpfs (RAM)
 ├── drizzle.config.ts               # Configuración de Drizzle Kit
-├── justfile                        # Orquestador declarativo de los 4 niveles de validación
+├── justfile                        # Orquestador declarativo: setup, doctor, niveles 1-4
 ├── package.json                    # Scripts npm y dependencias estrictas
 ├── scripts/
+│   ├── doctor.sh                   # Diagnóstico fail-closed de herramientas del sistema
+│   ├── hooks/
+│   │   ├── guard-holdouts.sh       # PreToolUse: bloquea escritura sobre hold-outs (Capa 1)
+│   │   ├── stop-gate.sh            # Stop: exige gauntlet-fast en verde (Capa 1)
+│   │   └── pre-commit.sh           # Fuente versionada del git hook (Capa 2)
 │   ├── mutate-diff.sh              # Stryker enfocado exclusivamente en diff git vs main
 │   ├── test-contracts.sh           # Levantamiento de Fastify + Fuzzing Schemathesis (Gate 3)
 │   ├── test-db-drift.sh            # Comprobación de deriva de esquema (Gate 2)
@@ -177,15 +202,32 @@ cat << 'HTMLEOF' > "$HTML_OUT"
     └── unit/                       # Pruebas unitarias de ejecución instantánea
   </pre>
 
-  <h2>4. Guía de Operación para Agentes Autónomos</h2>
+  <h3>Recetas Clave del <code>justfile</code></h3>
+  <table>
+    <thead>
+      <tr><th>Receta</th><th>Propósito</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>just setup</code></td><td>Bootstrap completo de un clon nuevo: doctor, instalación de dependencias, instalación del git hook, reset de base de datos y Nivel 2 en verde.</td></tr>
+      <tr><td><code>just doctor</code></td><td>Verifica fail-closed que todas las herramientas del sistema estén instaladas antes de operar.</td></tr>
+      <tr><td><code>just install-hooks</code></td><td>Instala <code>scripts/hooks/pre-commit.sh</code> como <code>.git/hooks/pre-commit</code> en el clon local (Capa 2).</td></tr>
+      <tr><td><code>just db-reset</code></td><td>Recrea <code>webstack_dev</code> desde cero y aplica las migraciones oficiales de Drizzle.</td></tr>
+      <tr><td><code>just seal-holdouts</code></td><td>Ruta exclusiva humana: recalcula <code>.holdout.sha256</code> tras un cambio intencional a la suite hold-out.</td></tr>
+      <tr><td><code>just review-start</code> / <code>review-clean</code></td><td>Despliega o desmonta un git worktree aislado para el rol Reviewer.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Guía de Operación para Agentes Autónomos</h2>
   <p>Al despachar tareas a un agente de código dentro de este repositorio, el agente debe operar bajo el siguiente flujo de trabajo:</p>
   <ol>
+    <li><strong>Bootstrap:</strong> En un clon nuevo o entorno desconocido, correr <code>just setup</code> antes de cualquier otra cosa; no asumir que el entorno ya está inicializado.</li>
     <li><strong>Aislamiento de Entorno:</strong> Operar en una rama de trabajo secundaria creada a partir de <code>main</code>.</li>
     <li><strong>Ciclo Rápido:</strong> Correr <code>just gauntlet-fast</code> tras cada modificación de archivo.</li>
     <li><strong>Persistencia de Datos:</strong> Al tocar <code>schema.ts</code>, ejecutar obligatoriamente <code>just db-generate</code>, escribir el archivo <code>.down.sql</code> complementario y verificar con <code>just gauntlet</code>.</li>
     <li><strong>Exposición de Endpoints:</strong> Todo endpoint registrado en <code>src/http/app.ts</code> debe declarar su esquema TypeBox, el contrato <code>401</code> si requiere credenciales, o <code>config: { isPublic: true }</code> si es público.</li>
     <li><strong>Criterio de Aceptación:</strong> Una tarea sólo se considera concluida cuando el agente reporte la salida de <code>just gauntlet-full</code> con código de salida 0.</li>
   </ol>
+  <p>Ver <code>AGENTS.md</code> en la raíz del repositorio para el protocolo operativo completo, incluyendo los roles Generator y Reviewer.</p>
 
 </body>
 </html>

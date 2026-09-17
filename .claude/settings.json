@@ -4,14 +4,20 @@
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "bash scripts/hooks/guard-holdouts.sh" }
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/guard-holdouts.sh"
+          }
         ]
       }
     ],
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "bash scripts/hooks/stop-gate.sh" }
+          {
+            "type": "command",
+            "command": "bash scripts/hooks/stop-gate.sh"
+          }
         ]
       }
     ]
