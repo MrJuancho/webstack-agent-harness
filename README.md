@@ -57,6 +57,22 @@ template would try to resolve `{{BRANCH}}` as a missing Copier variable and fail
 copied literally instead, and its two real substitutions (`__PACKAGE_NAME__`,
 `__DB_NAME__`) are resolved with `sed` in `copier.yml`'s `_tasks`, after copying.
 
+## Workflow: this repo requires PRs, generated projects don't
+
+`main` is branch-protected: every change needs a PR with a green `verify-template.sh`
+check (enforced for the owner too, no bypass) before it can merge — `git push origin
+main` directly will be rejected. This is deliberate and specific to *this* repo, not
+inherited by projects generated from it (those default to direct-push-to-main, matching
+`template/AGENTS.md.jinja`'s Generator role). The two-command flow:
+
+```bash
+git checkout -b fix/whatever
+git commit -am "..." && git push origin fix/whatever
+gh pr create --base main --head fix/whatever --title "..." --body "..."
+# wait for the verify-template.sh check, then:
+gh pr merge --squash --delete-branch
+```
+
 ## Maintaining this template
 
 [`scripts/verify-template.sh`](./scripts/verify-template.sh) runs a real `copier copy`
