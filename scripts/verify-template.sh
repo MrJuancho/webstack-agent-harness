@@ -39,10 +39,12 @@ SOURCE_DIR=$(mktemp -d)
 SCRATCH_DIR=$(mktemp -d)
 WORKTREE_A_DIR=$(mktemp -d)
 WORKTREE_B_DIR=$(mktemp -d)
+LINT_JSON_FILE=$(mktemp)
 ERRORS=0
 
 cleanup() {
   rm -rf "$SOURCE_DIR" "$SCRATCH_DIR" "$WORKTREE_A_DIR" "$WORKTREE_B_DIR"
+  rm -f "$LINT_JSON_FILE"
 }
 trap cleanup EXIT INT TERM
 
@@ -200,6 +202,45 @@ if command -v just >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1; then
   fi
 else
   echo "ERROR: 'just' y/o 'pnpm' no están instalados -- no se puede verificar 'just test-domain'. Bloqueo preventivo." >&2
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Gate 10 (determinismo del dominio, ESLint no-restricted-syntax): el modo
+# de falla real de un gate de análisis estático no es que la regla esté
+# mal escrita, es que no aplique -- un glob que no matchea, o un bloque de
+# la config plana en el orden equivocado, y queda de adorno pasando en
+# verde para siempre. Copia el fixture (tests/fixtures/clock-violations.ts.txt
+# -- un caso de cada patrón prohibido, más los casos que sí deben pasar)
+# como src/domain/__clock_check__.ts DENTRO del proyecto generado, corre
+# ESLint de verdad, y afirma tanto que falla como el conteo EXACTO de
+# violaciones -- "falló con algo" no basta, un gate que no se prueba a sí
+# mismo no es un gate.
+EXPECTED_CLOCK_VIOLATIONS=7
+if command -v jq >/dev/null 2>&1 && [ -d "$SCRATCH_DIR/node_modules" ]; then
+  echo "==> Verificando Gate 10 (determinismo del dominio) con el fixture real..."
+  CLOCK_FIXTURE_TARGET="$SCRATCH_DIR/src/domain/__clock_check__.ts"
+  cp "$SCRATCH_DIR/tests/fixtures/clock-violations.ts.txt" "$CLOCK_FIXTURE_TARGET"
+
+  ( cd "$SCRATCH_DIR" && pnpm exec eslint --format json src/domain/__clock_check__.ts >"$LINT_JSON_FILE" 2>/dev/null )
+
+  rm -f "$CLOCK_FIXTURE_TARGET"
+
+  ACTUAL_VIOLATIONS=$(jq '[.[0].messages[]? | select(.ruleId == "no-restricted-syntax")] | length' "$LINT_JSON_FILE" 2>/dev/null || echo "")
+  TOTAL_MESSAGES=$(jq '.[0].messages | length' "$LINT_JSON_FILE" 2>/dev/null || echo "")
+
+  if [ -z "$ACTUAL_VIOLATIONS" ] || [ -z "$TOTAL_MESSAGES" ]; then
+    echo "ERROR: Gate 10 no produjo un reporte JSON de ESLint válido -- ¿'pnpm exec eslint' rompió?" >&2
+    cat "$LINT_JSON_FILE" >&2
+    ERRORS=$((ERRORS + 1))
+  elif [ "$ACTUAL_VIOLATIONS" != "$EXPECTED_CLOCK_VIOLATIONS" ] || [ "$TOTAL_MESSAGES" != "$EXPECTED_CLOCK_VIOLATIONS" ]; then
+    echo "ERROR: Gate 10 esperaba exactamente $EXPECTED_CLOCK_VIOLATIONS violaciones de 'no-restricted-syntax' (y ningún otro mensaje) en el fixture; encontró $ACTUAL_VIOLATIONS de no-restricted-syntax entre $TOTAL_MESSAGES mensajes totales. El gate no está aplicando como se espera -- revisar el glob 'files' de src/domain/**/*.ts en eslint.config.js y el orden de los bloques de la config plana." >&2
+    cat "$LINT_JSON_FILE" >&2
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "✔ Gate 10: el fixture produce exactamente $EXPECTED_CLOCK_VIOLATIONS violaciones de no-restricted-syntax, como se esperaba."
+  fi
+else
+  echo "ERROR: 'jq' no está instalado, o no hay node_modules en el proyecto generado -- no se puede verificar Gate 10. Bloqueo preventivo." >&2
   ERRORS=$((ERRORS + 1))
 fi
 

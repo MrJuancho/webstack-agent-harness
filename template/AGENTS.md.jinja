@@ -22,14 +22,14 @@ Todo agente debe ejecutar el nivel adecuado según el ciclo de trabajo:
 
 | Nivel | Comando | Cuándo Ejecutar | Alcance Técnico |
 |---|---|---|---|
-| **Nivel 1** | `just gauntlet-fast` | Tras cada edición de archivo | Gitleaks (staging), `tsc --noEmit`, ESLint, Vitest unitario y la suite de dominio (`just test-domain`, <1s, sin Postgres). |
-| **Nivel 2** | `just gauntlet` | Antes de commitear cambios | Aislamiento arquitectónico (depcruise), Gate 9 (justificación de supresiones Stryker), PostgreSQL tmpfs, deriva DDL (Gate 2), reversibilidad Up/Down (Gate 1), matriz de auth (Gate 4) y detector N+1 (Gate 6). |
+| **Nivel 1** | `just gauntlet-fast` | Tras cada edición de archivo | Gitleaks (staging), `tsc --noEmit`, ESLint (incluye Gate 10, determinismo del dominio), Vitest unitario, la suite de dominio (`just test-domain`, <1s, sin Postgres) y Gate 9 (justificación de supresiones). |
+| **Nivel 2** | `just gauntlet` | Antes de commitear cambios | Aislamiento arquitectónico (depcruise), PostgreSQL tmpfs, deriva DDL (Gate 2), reversibilidad Up/Down (Gate 1), matriz de auth (Gate 4) y detector N+1 (Gate 6). |
 | **Nivel 3** | `just gauntlet-full` | Antes de solicitar revisión/PR | Property tests con arbitrarios de dominio real, Schemathesis (Gate 3), semillas deterministas (Gate 7), hold-outs SHA-256 (Gate 5) y mutación sobre diff de dominio (Stryker, `mutate:diff`). |
 | **Nivel 4** | `just audit` | Tareas programadas / auditoría | Mutación exhaustiva (no solo el diff) de `src/domain/**` completo. |
 
 ---
 
-## 2. Los 9 Gates de Seguridad
+## 2. Los 10 Gates de Seguridad
 
 1. **Gate 1 (Migraciones Reversibles):** Todo `.sql` requiere su `.down.sql`. El rollback no debe dejar residuos DDL en `pg_dump`.
 2. **Gate 2 (Schema Drift):** Modificaciones en `src/infra/db/schema.ts` requieren correr `just db-generate`. No puede haber discrepancia entre TypeScript y SQL.
@@ -39,7 +39,8 @@ Todo agente debe ejecutar el nivel adecuado según el ciclo de trabajo:
 6. **Gate 6 (Detector N+1):** Las consultas relacionadas deben resolverse vía joins o batching (`inArray`). Iterar consultas dentro de bucles sobrepasa el límite de `assertMaxQueries` y rompe el gate.
 7. **Gate 7 (Semillas Deterministas):** Prohibido usar `Date.now()`, `new Date()` sin fecha fija, o UUIDs dinámicos en `seed.ts`. Las firmas SHA-256 de volcados consecutivos deben ser idénticas.
 8. **Gate 8 (Prevención de Secretos):** Gitleaks escanea el área de preparación en cada ciclo rápido.
-9. **Gate 9 (Justificación de Supresiones Stryker):** Toda `// Stryker disable ...` requiere razón en la misma línea (`: texto`). Un mutante equivalente real (un desempate que no cambia la salida observable) es motivo legítimo de supresión -- pero también es la salida de emergencia más obvia para ponerse en verde sin resolver nada, así que no se acepta sin justificar. `just gauntlet` (`check-stryker-suppressions`) la exige con un grep; el Reviewer revisa cada supresión nueva del diff una por una, no solo que el texto exista.
+9. **Gate 9 (Justificación de Supresiones):** Toda supresión en `src/domain/` requiere razón en la misma línea -- de Stryker (`// Stryker disable ...: texto`) o de la regla ESLint del Gate 10 (`// eslint-disable-next-line no-restricted-syntax -- texto`, la sintaxis de descripción que ESLint mismo reconoce; `:` en vez de `--` no suprime nada -- ESLint intenta resolver "no-restricted-syntax: texto" como nombre de regla, falla, y el error original queda sin suprimir además de sumar uno nuevo). Un mutante equivalente real, o una lectura de reloj/aleatoriedad genuinamente inevitable en un borde muy específico, son motivo legítimo de supresión -- pero también son la salida de emergencia más obvia para ponerse en verde sin resolver nada, así que no se aceptan sin justificar. `just gauntlet-fast` (`check-suppressions`) lo exige con un solo grep para ambos casos; el Reviewer revisa cada supresión nueva del diff una por una, no solo que el texto exista.
+10. **Gate 10 (Determinismo del Dominio):** `src/domain/**` no lee ambiente no determinista -- ni el reloj (`Date.now()`, `new Date()` sin argumentos, `performance.now()`, `process.hrtime()`), ni aleatoriedad (`Math.random()`), ni la zona horaria del entorno (`Intl.DateTimeFormat()`). Regla ESLint (`no-restricted-syntax`) scopeada a `src/domain/**/*.ts` -- ver `eslint.config.js`. `new Date(valor)` con argumento sigue permitido: construir un instante a partir de un valor recibido es legítimo, leer el reloj no lo es. El tiempo y la aleatoriedad entran como parámetros explícitos desde la capa de aplicación. Una sola lectura intermitente rompe la reproducibilidad de las property tests (fast-check) y hace que los mutantes de Stryker corran distinto entre corridas -- el peor modo de falla posible, porque pasa en verde la mayoría de las veces.
 
 ---
 
@@ -150,6 +151,16 @@ Para evitar colisiones de dependencias, bloqueo de puertos y sobrescritura de ra
   negocio termina escrita dentro de un handler, ya salió del alcance de la mutación
   (ver "Mutación: qué se prueba y qué no") sin que ningún gate lo marque -- ese es el
   modo de falla exacto que esta regla existe para prevenir.
+- **"Sin reloj" es mecánico, no una promesa verbal:** Gate 10 (ESLint,
+  `no-restricted-syntax`) prohíbe `Date.now()`, `new Date()` sin argumentos,
+  `performance.now()`, `process.hrtime`, `Math.random()` e
+  `Intl.DateTimeFormat()` dentro de `src/domain/**`, corre en `gauntlet-fast`
+  (milisegundos) y aborta la sesión si falla. Entérate de la regla leyendo
+  esto, no chocando con el hook de `Stop` a mitad de una tarea: si el
+  dominio necesita el instante actual o un valor aleatorio, recíbelo como
+  parámetro explícito desde la capa de aplicación -- nunca lo leas del
+  entorno dentro de `src/domain/**`. `new Date(valor)` con argumento sigue
+  permitido.
 
 ### Rol: Reviewer (Auditoría de Código)
 

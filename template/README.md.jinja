@@ -56,13 +56,13 @@ specific value instead of the derived one).
 
 | Tier | Command | When | Scope |
 |---|---|---|---|
-| 1 | `just gauntlet-fast` | after every file edit | typecheck, lint, unit tests, domain suite (`just test-domain`, no Postgres), staged-secret scan |
-| 2 | `just gauntlet` | before every commit | architecture isolation, Stryker suppression justification, schema drift, reversible migrations, auth matrix, N+1 detection |
+| 1 | `just gauntlet-fast` | after every file edit | typecheck, lint (incl. domain determinism), unit tests, domain suite (`just test-domain`, no Postgres), suppression justification, staged-secret scan |
+| 2 | `just gauntlet` | before every commit | architecture isolation, schema drift, reversible migrations, auth matrix, N+1 detection |
 | 3 | `just gauntlet-full` | before merge/PR | property tests, OpenAPI contract fuzzing, seed determinism, hold-out integrity, diff mutation |
 | 4 | `just audit` | scheduled | full mutation testing of `src/domain/**` |
 
-Each tier includes everything in the tier below it. Details on all 9 gates live in
-[`AGENTS.md`](./AGENTS.md#2-los-9-gates-de-seguridad).
+Each tier includes everything in the tier below it. Details on all 10 gates live in
+[`AGENTS.md`](./AGENTS.md#2-los-10-gates-de-seguridad).
 
 ## Mutation testing scope
 
@@ -72,7 +72,11 @@ logic that leaks into an HTTP handler or an infra adapter falls out of mutation 
 without any gate complaining, which is exactly the failure mode this boundary exists to
 prevent. `dependency-cruiser`'s `domain-isolation` rule blocks `src/domain` from
 importing `infra`/`http`; keeping the *logic* itself there too is on the author and the
-reviewer.
+reviewer. An ESLint rule (Gate 10, `no-restricted-syntax`, runs in `gauntlet-fast`)
+blocks reading the wall clock or a non-deterministic random source from inside
+`src/domain` — a single intermittent read there breaks fast-check's reproducibility and
+makes Stryker's mutants run differently between runs, the worst possible failure mode
+because it passes green most of the time.
 
 Handlers, adapters, and wiring (`src/http/`, `src/infra/`) are deliberately **not**
 mutated — not because they don't matter, but because they're already covered more
@@ -88,8 +92,9 @@ only the tests that actually touch the mutated line — see `just test-domain`. 
 `incremental: true` (state in `.stryker-tmp/`, gitignored) only helps locally: CI starts
 from a clean checkout every run, so `just gauntlet-full`/`just audit` in CI always run
 in full. See [`AGENTS.md`](./AGENTS.md#mutación-qué-se-prueba-y-qué-no) for the full
-rationale, including why a `// Stryker disable` suppression needs a same-line reason
-(Gate 9) and gets reviewed individually, not rubber-stamped.
+rationale, including why a `// Stryker disable` or `// eslint-disable ...
+no-restricted-syntax` suppression needs a same-line reason (Gate 9) and gets reviewed
+individually, not rubber-stamped.
 
 ## Enforcement, not just checks
 
