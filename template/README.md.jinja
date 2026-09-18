@@ -53,6 +53,13 @@ this worktree's own container, naming the port and pointing at the `PG_PORT=<por
 environment-variable escape hatch (set it before running `worktree-env.sh` to force a
 specific value instead of the derived one).
 
+`just doctor` also checks `.copier-answers.yml`'s `_commit` against the template's real
+remote `HEAD` and warns (not fails, by default — being pinned behind `HEAD` is often
+intentional) if this project is behind. Set `DOCTOR_STRICT_TEMPLATE_FRESHNESS=1` to make
+that a hard failure instead — useful in CI if you want to guarantee a fresh generation.
+This exists because a confusing Docker failure with zero indication that the project
+came from a stale template snapshot is a real incident, not a hypothetical one.
+
 ## The verification tiers
 
 | Tier | Command | When | Scope |

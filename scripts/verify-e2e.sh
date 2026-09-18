@@ -1,26 +1,32 @@
 #!/usr/bin/env bash
-# Prueba end-to-end REAL: genera un proyecto desde el template en un
-# directorio temporal, instala dependencias de verdad, y corre
-# `just setup && just gauntlet-full` de principio a fin -- Docker real,
-# Postgres real, sin mocks ni atajos.
+# Prueba end-to-end REAL: toma la plantilla EXACTAMENTE como la tomaría
+# un usuario real -- clonando el remoto, sin --vcs-ref -- genera un
+# proyecto en un directorio temporal, instala dependencias de verdad, y
+# corre `just setup && just gauntlet-full` de principio a fin. Docker
+# real, Postgres real, red real, sin mocks ni atajos.
 #
-# Esto es exactamente lo que scripts/verify-template.sh deliberadamente
-# NO hace -- su propio comentario dice "no que la app de ejemplo pase su
-# propio gauntlet (eso requeriría Docker + red + varios minutos)". Ese
-# hueco conocido cobró factura una vez: verify-template.sh pasaba sus
-# cuatro checks en verde mientras `just setup` fallaba sobre Docker real
-# en un proyecto recién generado (PG_PORT/COMPOSE_PROJECT_NAME nunca
-# resueltos a tiempo, un wait a Postgres que no esperaba de verdad, un
-# db-reset que reutilizaba estado de una corrida anterior). Este script
-# es la respuesta a eso -- no una capa más de "parece que funciona".
+# "Sin --vcs-ref" es deliberado, no un descuido: Copier usa el tag más
+# reciente por defecto si el repo tiene tags, y no el checkout local de
+# quien corre esto -- probar contra un rsync del working tree (la versión
+# anterior de este script) no puede atrapar eso. Confirmado con un
+# incidente real: dos tags viejos en este repo hacían que el comando de
+# Quick Start del README sirviera un snapshot de ~30 commits de
+# antigüedad a cualquiera, sin ningún aviso -- ver docs/progress.md.
+# Borrar esos tags arregla el síntoma hoy, no el mecanismo: el día que
+# este repo vuelva a tener tags (el uso maduro y deseable de una
+# plantilla versionada), la misma trampa vuelve a estar armada. Por eso
+# este script también afirma que el `_commit` que terminó en
+# `.copier-answers.yml` coincide con el HEAD remoto real -- reusando el
+# mismo check de `doctor.sh` (DOCTOR_STRICT_TEMPLATE_FRESHNESS=1) que un
+# usuario real vería como advertencia, no duplicando la lógica acá.
 #
-# Lento a propósito (pnpm install + Docker + el gauntlet completo, varios
-# minutos): no corre en cada push/PR. Ver .github/workflows/verify-e2e.yml
-# (programado + disparo manual).
+# Lento a propósito (red + pnpm install + Docker + el gauntlet completo,
+# varios minutos): no corre en cada push/PR. Ver
+# .github/workflows/verify-e2e.yml (programado + disparo manual).
 set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-SOURCE_DIR=$(mktemp -d)
+TEMPLATE_URL="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
 PROJECT_DIR=$(mktemp -d)
 ERRORS=0
 
@@ -28,21 +34,37 @@ cleanup() {
   if [ -d "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/docker-compose.yml" ]; then
     ( cd "$PROJECT_DIR" && docker compose down -v >/dev/null 2>&1 || true )
   fi
-  rm -rf "$SOURCE_DIR" "$PROJECT_DIR"
+  rm -rf "$PROJECT_DIR"
 }
 trap cleanup EXIT INT TERM
 
-for TOOL in copier just pnpm docker jq; do
+for TOOL in copier just pnpm docker jq git; do
   command -v "$TOOL" >/dev/null 2>&1 || {
     echo "ERROR: '$TOOL' no está instalado -- no se puede correr la verificación end-to-end. Bloqueo preventivo." >&2
     exit 1
   }
 done
 
-rsync -a --exclude='.git' --exclude='node_modules' --exclude='.env' "$REPO_ROOT/" "$SOURCE_DIR/"
+if [ -z "$TEMPLATE_URL" ]; then
+  echo "ERROR: no se pudo resolver la URL del remoto 'origin' -- no hay contra qué probar como lo haría un usuario real." >&2
+  exit 1
+fi
 
-echo "==> Generando proyecto de prueba end-to-end en $PROJECT_DIR..."
-COPY_OUTPUT=$(copier copy "$SOURCE_DIR" "$PROJECT_DIR" \
+echo "==> Consultando el HEAD remoto real de $TEMPLATE_URL antes de generar..."
+# `awk '$2 == "HEAD"'`, no un simple `{print $1}`: `git ls-remote <repo>
+# HEAD` matchea como patrón cualquier ref que TERMINE en "HEAD" (ej.
+# refs/remotes/origin/HEAD si el remoto trae refs de tracking), no solo
+# el ref exacto -- confirmado a mano contra un path local. Exigir la
+# coincidencia exacta es gratis y cierra ese caso raro también acá.
+EXPECTED_HEAD=$(timeout 10 git ls-remote "$TEMPLATE_URL" HEAD 2>/dev/null | awk '$2 == "HEAD" {print $1; exit}' || true)
+if [ -z "$EXPECTED_HEAD" ]; then
+  echo "ERROR: no se pudo consultar el HEAD remoto de $TEMPLATE_URL (¿sin red?). Bloqueo preventivo." >&2
+  exit 1
+fi
+echo "    HEAD remoto esperado: $EXPECTED_HEAD"
+
+echo "==> Generando proyecto de prueba end-to-end en $PROJECT_DIR (clonando $TEMPLATE_URL, SIN --vcs-ref -- igual que un usuario real)..."
+COPY_OUTPUT=$(copier copy "$TEMPLATE_URL" "$PROJECT_DIR" \
   --data project_name="Verify E2E" \
   --data package_name="verify-e2e" \
   --data db_name="verify_e2e_dev" \
@@ -57,6 +79,23 @@ if [ "$COPY_CODE" -ne 0 ]; then
 fi
 
 cd "$PROJECT_DIR"
+
+echo "==> Verificando que el proyecto generado viene del HEAD remoto esperado..."
+if [ -f .copier-answers.yml ]; then
+  ACTUAL_COMMIT=$(grep -E '^_commit:' .copier-answers.yml | head -1 | sed -E "s/^_commit:[[:space:]]*//; s/^['\"]//; s/['\"]\$//")
+  case "$EXPECTED_HEAD" in
+    "$ACTUAL_COMMIT"*)
+      echo "✔ El proyecto generado viene del HEAD remoto esperado (_commit=$ACTUAL_COMMIT)."
+      ;;
+    *)
+      echo "ERROR: el proyecto generado viene de _commit=$ACTUAL_COMMIT, pero el HEAD remoto real es $EXPECTED_HEAD -- 'copier copy' sin --vcs-ref no está sirviendo HEAD (¿volvió a haber un tag?)." >&2
+      ERRORS=$((ERRORS + 1))
+      ;;
+  esac
+else
+  echo "ERROR: el proyecto generado no tiene .copier-answers.yml -- 'copier update' quedaría roto para cualquiera que lo use." >&2
+  ERRORS=$((ERRORS + 1))
+fi
 
 # Ningún archivo del proyecto generado debe tener "5432" literal SIN
 # PG_PORT de por medio -- eso sería un hardcode real que ignora el
@@ -85,9 +124,9 @@ else
   echo "✔ Todo uso de '5432' está atado a PG_PORT (o es el puerto interno fijo de 'docker compose port')."
 fi
 
-echo "==> Corriendo 'just setup' de verdad (Docker real, Postgres real)..."
+echo "==> Corriendo 'just setup' de verdad (Docker real, Postgres real, doctor en modo estricto)..."
 SETUP_LOG=$(mktemp)
-if just setup >"$SETUP_LOG" 2>&1; then
+if DOCTOR_STRICT_TEMPLATE_FRESHNESS=1 just setup >"$SETUP_LOG" 2>&1; then
   echo "✔ 'just setup' terminó en verde."
 else
   echo "ERROR: 'just setup' falló:" >&2

@@ -7,33 +7,33 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-**Hallazgo crítico, fuera del código:** el comando de Quick Start de este
-mismo README (`copier copy` sin `--vcs-ref`) estaba sirviendo un snapshot
-de ~30 commits de antigüedad (tag `v0.1.0`, la primera conversión a
-Copier) a CUALQUIERA que lo corriera -- Copier usa el tag más reciente por
-defecto si el repo tiene tags, y este tenía dos (`v0.1.0`, `v1.0.0-harness`,
-el segundo incluso más viejo, de antes de existir `copier.yml`). Ningún
-fix de esta sesión ni de las anteriores llegaba a un proyecto recién
-generado así, incluyendo el aislamiento por worktree completo. Confirmado
-reproduciendo el comando exacto contra GitHub real. Ambos tags borrados
-(local y remoto, con confirmación explícita del usuario) -- verificado que
-`copier copy` sin ref ahora cae en `main` HEAD ("No git tags found in
-template; using HEAD as ref") y que `just setup` corre en verde con el
-contenedor nombrado correctamente (`<package>-<hash>-postgres-1`).
+Incidente real: `copier copy` sin `--vcs-ref` servía un snapshot de ~30
+commits (tag `v0.1.0`) a cualquiera, por tags viejos que shadoweaban
+`main`. Borrar los tags (con confirmación del usuario) arregló el
+síntoma, NO el mecanismo -- el día que este repo vuelva a tener tags (uso
+maduro y deseable de una plantilla versionada), la misma trampa vuelve.
+La protección durable, más barata: este template NUNCA escribía
+`.copier-answers.yml` (le faltaba el archivo estándar
+`{{ _copier_conf.answers_file }}.jinja` que Copier exige que la propia
+plantilla provea) -- `copier update` estaba roto para TODO proyecto
+generado desde siempre, confirmado a mano. Arreglado. `doctor.sh` ahora
+compara `_commit` contra el HEAD remoto real de la plantilla (advierte
+por defecto, falla con `DOCTOR_STRICT_TEMPLATE_FRESHNESS=1`).
+`scripts/verify-e2e.sh` reescrito para clonar el remoto real sin
+`--vcs-ref` (antes probaba el working tree local, el camino que no
+habría atrapado el incidente) y afirmar que el `_commit` resultante
+coincide con el HEAD remoto real. README raíz: recomienda `--vcs-ref`
+explícito siempre; nunca borrar tags como arreglo futuro (rompe
+`copier update` de quien ya generó contra ellos).
 
-Además, en la rama `fix/e2e-generation-bugs` (PR #8, pendiente de
-mergear): `db-up` tenía un wait a Postgres que no esperaba de verdad
-(intento único + `sleep 2` + seguir de largo); `db-reset` reutilizaba el
-contenedor de una corrida anterior ("efímero" era falso); `doctor.sh`
-solo advertía (⚠) si faltaba `.env.local`. Los tres arreglados y
-verificados con Docker real. Nuevo `scripts/verify-e2e.sh` -- ojo: no
-habría atrapado el bug de los tags, corre desde un checkout local, no vía
-`copier copy` contra el remoto real; tenerlo en cuenta si se vuelve a
-taggear este repo.
+Los tres arreglos de PR #8 (`pg_isready` real, `db-reset` con `down -v`,
+`doctor` fail-closed) quedaron re-confirmados contra el branch local --
+las corridas anteriores habían sido, sin darme cuenta, contra el
+snapshot viejo. Verificados de nuevo, en verde.
 
 ## Qué sigue
 
-Mergear PR #8 (`fix/e2e-generation-bugs`).
+Mergear PR #8. Correr `verify-e2e.sh` real (remoto pusheado) antes.
 
 ## Bloqueado / pendiente de decisión
 
