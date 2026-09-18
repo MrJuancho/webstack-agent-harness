@@ -1,9 +1,15 @@
+# El nombre de proyecto por defecto es {{ package_name }}, pero la variable
+# de entorno COMPOSE_PROJECT_NAME (escrita en .env.local por
+# scripts/worktree-env.sh, uno por worktree) tiene prioridad sobre esto --
+# es lo que da namespacing real de contenedores/redes/volúmenes entre
+# worktrees del mismo proyecto. No fijar `container_name:` es deliberado:
+# un nombre fijo sería global al host Docker y colisionaría entre
+# worktrees sin importar el nombre de proyecto.
 name: {{ package_name }}
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: {{ package_name }}-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -12,4 +18,6 @@ services:
     tmpfs:
       - /var/lib/postgresql/data:rw,noexec,nosuid,size=512m
     ports:
-      - "5432:5432"
+      # PG_PORT viene de .env.local (scripts/worktree-env.sh) -- único por
+      # worktree. Sin PG_PORT en el entorno, cae al 5432 de siempre.
+      - "${PG_PORT:-5432}:5432"
