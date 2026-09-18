@@ -25,8 +25,15 @@
 # .github/workflows/verify-e2e.yml (programado + disparo manual).
 set -uo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TEMPLATE_URL="$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || true)"
+# URL canónica y pública, la misma que el README documenta en su comando
+# de Quick Start -- a propósito NO derivada de `git remote get-url
+# origin`: ese remoto refleja cómo ESTE checkout particular está
+# configurado (podría ser SSH, un fork, un mirror), no lo que un usuario
+# real tipea siguiendo el README. Confirmado a mano: en este entorno
+# `origin` es SSH y `git ls-remote` sobre SSH se queda colgado sin
+# credenciales -- exactamente el tipo de falso negativo que probar la URL
+# canónica evita.
+TEMPLATE_URL="https://github.com/MrJuancho/webstack-agent-harness.git"
 PROJECT_DIR=$(mktemp -d)
 ERRORS=0
 
@@ -45,18 +52,13 @@ for TOOL in copier just pnpm docker jq git; do
   }
 done
 
-if [ -z "$TEMPLATE_URL" ]; then
-  echo "ERROR: no se pudo resolver la URL del remoto 'origin' -- no hay contra qué probar como lo haría un usuario real." >&2
-  exit 1
-fi
-
 echo "==> Consultando el HEAD remoto real de $TEMPLATE_URL antes de generar..."
 # `awk '$2 == "HEAD"'`, no un simple `{print $1}`: `git ls-remote <repo>
 # HEAD` matchea como patrón cualquier ref que TERMINE en "HEAD" (ej.
 # refs/remotes/origin/HEAD si el remoto trae refs de tracking), no solo
 # el ref exacto -- confirmado a mano contra un path local. Exigir la
 # coincidencia exacta es gratis y cierra ese caso raro también acá.
-EXPECTED_HEAD=$(timeout 10 git ls-remote "$TEMPLATE_URL" HEAD 2>/dev/null | awk '$2 == "HEAD" {print $1; exit}' || true)
+EXPECTED_HEAD=$(timeout 30 git ls-remote "$TEMPLATE_URL" HEAD 2>/dev/null | awk '$2 == "HEAD" {print $1; exit}' || true)
 if [ -z "$EXPECTED_HEAD" ]; then
   echo "ERROR: no se pudo consultar el HEAD remoto de $TEMPLATE_URL (¿sin red?). Bloqueo preventivo." >&2
   exit 1

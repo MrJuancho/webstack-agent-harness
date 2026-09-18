@@ -117,7 +117,7 @@ if [ -f "$ANSWERS_FILE" ]; then
     # como patrón cualquier ref que TERMINE en HEAD, no solo el ref exacto
     # -- confirmado a mano, devolvía dos líneas. Contra una URL real esto no
     # pasa, pero exigir la coincidencia exacta es gratis y evita el caso raro.
-    REMOTE_HEAD=$(timeout 5 git ls-remote "$ANSWERS_SRC" HEAD 2>/dev/null | awk '$2 == "HEAD" {print $1; exit}' || true)
+    REMOTE_HEAD=$(timeout 8 git ls-remote "$ANSWERS_SRC" HEAD 2>/dev/null | awk '$2 == "HEAD" {print $1; exit}' || true)
     if [ -z "$REMOTE_HEAD" ]; then
       report_provenance warn-or-fail "no se pudo consultar el HEAD remoto de la plantilla ($ANSWERS_SRC) -- ¿sin red? No se pudo confirmar la procedencia."
     else
