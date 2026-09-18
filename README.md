@@ -16,10 +16,23 @@ handoff for whoever is working on the template).
 
 ```bash
 uv tool install copier   # or: pipx install copier
-copier copy https://github.com/MrJuancho/webstack-agent-harness.git my-new-project
+copier copy --vcs-ref main https://github.com/MrJuancho/webstack-agent-harness.git my-new-project
 cd my-new-project
 just setup
 ```
+
+**Always pass `--vcs-ref` explicitly — don't rely on the default.** Without it, Copier
+uses the *latest git tag* if this repo has one, not `main`. This repo has no tags right
+now, so today omitting `--vcs-ref` happens to also land on `main` — but that's an
+accident of the current state, not a guarantee: this bit a real user once, when two
+stale tags from early in this repo's history silently shadowed months of fixes with no
+warning (see `docs/progress.md` and `template/scripts/doctor.sh`'s template-provenance
+check, which exists because of that incident). If/when this repo starts cutting tagged
+releases — the normal, desirable state for a template people build on — pin to the tag
+you actually want (`--vcs-ref v1.2.3`) for a real project, and use `--vcs-ref main` for
+anything you're just trying out. Never delete a tag to "fix" this once it's been used —
+anyone who already generated against it loses `copier update`'s base reference, which
+is a real, not hypothetical, way to break someone else's project.
 
 You'll be asked for `project_name` (human title), `package_name` (kebab-case slug,
 defaults from `project_name`), `db_name` (defaults from `package_name`), and
@@ -105,7 +118,23 @@ added after `.claude/` had already moved into `template/` mid-session, so — un
 edit to an existing settings file, which hot-reloads — a session needs to be
 **restarted** to pick up a settings.json that didn't exist at session start.
 
-There's no meta-test suite beyond this (what `gauntlet-template` has, with its own
-`pyproject.toml`/`pytest` at the root) — `verify-template.sh` is a fast mechanism-level
-check, not full coverage. Worth building if this template starts changing often enough
-for that gap to matter; see `docs/progress.md` for current status.
+`verify-template.sh` is deliberately a fast mechanism-level check, not full coverage —
+and that gap already cost a real regression once: it passed green on a working tree
+where the generated project's own `just setup` failed against real Docker (worktree
+isolation env vars never resolved in time, a Postgres wait that didn't actually wait,
+`db-reset` silently reusing a previous run's container). `verify-template.sh` cannot
+catch that class of bug by design — it never installs dependencies or touches Docker.
+
+[`scripts/verify-e2e.sh`](./scripts/verify-e2e.sh) closes that gap: unlike
+`verify-template.sh` (which copies the local working tree), it clones this repo's real
+remote with `copier copy` and **no `--vcs-ref`** — exactly what a user following this
+README gets — then runs `just setup && just gauntlet-full` against real Docker and real
+Postgres, and asserts on the actual consumer: the generated project's `.copier-answers.yml`
+`_commit` matches the template's real remote `HEAD` (this is what would have caught the
+stale-tag incident above — a working-tree-based check structurally can't), `.env.local`
+exists after setup, the running container's name carries the worktree hash, no generated
+file has a literal `5432` that isn't tied to `PG_PORT`. It's slow on purpose (network +
+Docker + a full gauntlet, several minutes), so it doesn't run on every push/PR like
+`verify-template.sh` does — see
+[`.github/workflows/verify-e2e.yml`](./.github/workflows/verify-e2e.yml) (scheduled
+daily + manual dispatch) instead.

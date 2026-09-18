@@ -1,0 +1,49 @@
+name: Verify E2E
+
+# Lento a propósito (Docker + Postgres real + el gauntlet completo, varios
+# minutos) -- por eso no corre en cada push/PR como verify-template.yml.
+# Programado + disparo manual, para que el hueco que scripts/verify-e2e.sh
+# existe para cerrar no vuelva a pasar inadvertido por mucho tiempo si se
+# rompe.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  verify-e2e:
+    name: verify-e2e.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install copier
+        run: uv tool install copier
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: template/pnpm-lock.yaml
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Install postgresql-client (pg_isready)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Run end-to-end verification
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          bash scripts/verify-e2e.sh

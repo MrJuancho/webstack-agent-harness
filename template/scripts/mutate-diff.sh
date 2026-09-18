@@ -42,4 +42,4 @@ if [ -z "$ALL_FILES" ]; then
 fi
 
 echo "Guantelete: Mutando archivos en diff: $ALL_FILES"
-pnpm exec stryker run --mutate "$ALL_FILES"
+bash scripts/run-mutation.sh --mutate "$ALL_FILES"

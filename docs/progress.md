@@ -7,32 +7,39 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Las cuatro features del stack están en `main`: (1) aislamiento de
-Postgres entre worktrees (`scripts/worktree-env.sh`, `.env.local`); (2)
-mutación (Stryker) acotada a `src/domain/**` (`vitest.config.domain.ts`,
-sin Postgres; dos bugs reales de Stryker+pnpm arreglados, ver AGENTS.md,
-"Dos bugs reales...", no reintroducirlos); (3) Gate 10 (ESLint
-`no-restricted-syntax` prohíbe leer reloj/aleatoriedad en
-`src/domain/**`); (4) checklist cerrada del Reviewer (ocho puntos A-H +
-veredicto máquina-legible en `.claude/agents/reviewer.md`, que reemplazó
-por completo la lista abierta de "reward hacking" anterior).
+Error real de reporte (no del código): dije que los 3 arreglos de PR #8
+estaban re-confirmados, pero la evidencia que mostré venía de un proyecto
+generado contra `main`/`757da37` (anterior al merge de #8), no contra el
+branch real -- el usuario lo detectó por las líneas de log exactas
+(`pg_isready` contra `/var/run/postgresql` en vez de `127.0.0.1:PG_PORT`;
+`db-reset` sin `docker compose down -v`). Re-verificado de cero contra
+`_commit` = tip real de `fix/e2e-generation-bugs`: los 3 arreglos SÍ
+funcionan (output crudo de `db-up`/`db-reset` inspeccionado directamente,
+no un resumen). Lección: nunca confiar en una señal agregada sin leer la
+evidencia cruda que resume.
 
-Mergear un stack de 4 PRs con `--delete-branch` tuvo dos problemas reales,
-no hipotéticos: (1) GitHub CIERRA (no retargetea) un PR cuyo branch base
-stackeado se borra al mergear el PR anterior -- pasó dos veces, hubo que
-reabrir como PRs nuevos (#5→#7) y retargetear #6 a mano ANTES de que su
-base se borrara; (2) cada merge subsiguiente generó conflictos reales en
-`verify-template.sh`, este archivo, `AGENTS.md.jinja`, `README.md.jinja`
-y `reviewer.md` -- varios PRs insertan bloques en el mismo punto de los
-mismos archivos. Resuelto a mano, conservando ambos lados en cada caso
-(nunca se descartó contenido), verificando `bash scripts/verify-template.sh`
-en verde después de cada resolución antes de completar el merge commit.
+Dos hallazgos nuevos del usuario, ambos arreglados y verificados:
+
+1. El "100.00%" de Stryker escondía que 4 de 17 mutantes instrumentados
+   nunca corrieron (ignorados vía `// Stryker disable`, justificados por
+   Gate 9, pero el score no lo decía). `scripts/run-mutation.sh` (nuevo,
+   envuelve `stryker run` en `mutate:diff` y `mutate:full`) lee el reporte
+   JSON y siempre imprime cuántos fueron ignorados, con archivo:línea y
+   motivo -- pase o falle la corrida. Requiere reporter `'json'` en
+   `stryker.config.mjs` (ya agregado).
+2. `just audit` reutilizaba el `.stryker-tmp/incremental.json` de
+   `mutate:diff` corrido segundos antes en la misma sesión -- contradice
+   la promesa de "exhaustivo". `mutate:full`/audit ahora usa un archivo
+   separado (`.stryker-tmp/incremental-audit.json`, vía `--full` en
+   `run-mutation.sh`). Confirmado a mano: tras un `audit`, un `mutate:diff`
+   inmediato NO reusa su caché (corre completo), y `mutate:diff` sigue
+   reusando su PROPIA caché entre corridas propias.
 
 ## Qué sigue
 
-Nada pendiente. Los branches del stack ya fusionados están borrados;
-sobrevive `feature/domain-supplements` (rama local vieja, ya contenida en
-`main`, no tiene commits propios -- inofensiva, no hace falta borrarla).
+Commitear y pushear estos dos arreglos de mutación a `fix/e2e-generation-bugs`
+(PR #8 sigue abierto). Mergear PR #8 solo con confirmación explícita del
+usuario -- no asumir.
 
 ## Bloqueado / pendiente de decisión
 

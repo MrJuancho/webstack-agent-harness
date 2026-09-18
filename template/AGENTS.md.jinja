@@ -75,6 +75,24 @@ en CI siempre corren completo. No hay que cachear `.stryker-tmp/` en CI para est
 este template no corre `just audit` como tarea programada; si un proyecto generado
 agrega ese cron, cachear `.stryker-tmp/` con clave por rama sí vuelve a tener sentido.
 
+`mutate:diff` y `mutate:full`/`just audit` usan archivos de estado incremental
+**separados** (`.stryker-tmp/incremental.json` para el primero,
+`.stryker-tmp/incremental-audit.json` para el segundo, vía `scripts/run-mutation.sh
+--full`). Si compartieran uno solo, `just audit` corrido poco después de un
+`mutate:diff` en la misma sesión reutilizaría sus resultados en vez de recorrer
+`src/domain/**` completo -- exactamente lo contrario de lo que un tier "auditoría
+exhaustiva" promete.
+
+Stryker no reporta en su tabla de resumen cuántos mutantes instrumentados fueron
+**ignorados** (`// Stryker disable`, ver Gate 9) -- un "100.00%" puede estar
+calculado solo sobre los mutantes que sí corrieron, escondiendo que una fracción
+real de los instrumentados nunca se ejecutó. `scripts/run-mutation.sh` (usado por
+ambos comandos) lee el reporte JSON (`reports/mutation/mutation.json`, reporter
+`'json'` en `stryker.config.mjs`) e imprime ese conteo -- archivo, línea y motivo de
+cada mutante ignorado -- después de cada corrida, pase o falle. Un score perfecto
+que esconde exclusiones sin decirlo es la métrica que un agente aprende a explotar;
+esto la hace imposible de esconder por accidente.
+
 ### Dos bugs reales que este trabajo encontró (no los reintroduzcas)
 
 Verificados a mano ejecutando Stryker de verdad, no solo leyendo el código -- ambos
