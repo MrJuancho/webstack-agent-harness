@@ -7,32 +7,30 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Cerrados los dos hallazgos de la auditoría de Capa 3/4: `.github/workflows/verify-template.yml`
-corre `scripts/verify-template.sh` en cada push/PR (job real, verificado en verde:
-https://github.com/MrJuancho/webstack-agent-harness/actions/runs/35197153660).
-Branch protection activada en `main` con `gh api` -- requiere PR + ese check,
-`enforce_admins: true`. Verificado en vivo dos veces: con
-`enforce_admins: false` un push directo del dueño pasó igual ("Bypassed rule
-violations" -- hallazgo real, no hipotético); con `enforce_admins: true`,
-el mismo tipo de push fue rechazado de verdad (GH006). El flujo PR
-completo (branch → push → PR #1 → check verde → squash merge → delete
-branch) se probó de punta a punta, no solo se configuró.
+Mutación (Stryker) acotada de verdad a `src/domain/**`: el glob `mutate`
+ya lo estaba, pero el testRunner apuntaba a `vitest.config.ts` completo
+(con Postgres). Ahora apunta a `vitest.config.domain.ts` (nuevo, sin
+Postgres, sin globalSetup). Nuevo `just test-domain` (<1s), Gate 9
+(`check-stryker-suppressions`: supresión de Stryker sin justificar falla
+`gauntlet`), tests de dominio co-ubicados en `src/domain/*.test.ts`.
 
-Decisión explícita del usuario: en vez de "requerir CI pero permitir push
-directo" (que GitHub no soporta para un commit nuevo -- el check no puede
-existir antes del primer push), se adoptó PR obligatorio para este repo
-raíz. Documentado en README, sección "Workflow: this repo requires PRs".
-**Esto NO aplica a proyectos generados** (`template/` sigue con push
-directo a `main`, como documenta `template/AGENTS.md.jinja`) -- es
-específico de este repo template.
+**Dos bugs reales encontrados corriendo Stryker de verdad (documentados
+en AGENTS.md, no reintroducir):** faltaba `.npmrc` (`node-linker=hoisted`)
+-- sin él pnpm no encuentra `@stryker-mutator/vitest-runner`,
+`mutate:full`/`mutate:diff` fallaban siempre en cualquier proyecto
+generado. Y `scripts/mutate-diff.sh` usaba pathspecs
+`'src/domain/**/*.ts'` que git nunca matcheaba -- `mutate:diff` (en
+`gauntlet-full`, corre antes de cada PR) siempre decía "Sin cambios
+detectados" con cambios de dominio reales sin commitear. Ambos arreglados
+y verificados con corridas reales: antes `mutate:full` no corría nada;
+después `just audit` ~5s en verde, score 76.47%→100% con 2 tests nuevos y
+2 supresiones justificadas (mutantes genuinamente equivalentes).
 
 ## Qué sigue
 
-Nada pendiente de la auditoría de esta sesión. Sin proyecto real generado
-todavía -- el usuario planea empezarlo mañana. Recordatorio para esa
-sesión: cualquier cambio a ESTE repo (el template) ahora necesita PR, no
-push directo -- ver README. Los cambios dentro de un proyecto YA generado
-siguen sin esa restricción.
+PR de este cambio en curso, en paralelo con otro PR (aislamiento de
+Postgres entre worktrees, rama `feat/worktree-postgres-isolation`) --
+ambos independientes entre sí, ninguno depende del otro para funcionar.
 
 ## Bloqueado / pendiente de decisión
 

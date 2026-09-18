@@ -21,6 +21,21 @@ jobs:
       - name: Install copier
         run: uv tool install copier
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: template/pnpm-lock.yaml
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
       - name: Verify template mechanism
         run: |
           export PATH="$HOME/.local/bin:$PATH"

@@ -8,7 +8,12 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['.dependency-cruiser.js', '*.config.js', '*.config.ts'],
+          allowDefaultProject: [
+            '.dependency-cruiser.js',
+            '*.config.js',
+            '*.config.ts',
+            'vitest.config.domain.ts',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -23,7 +28,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.js', '**/*.mjs', 'tests/**/*.ts', 'vitest.config.ts'],
+    files: ['**/*.js', '**/*.mjs', 'tests/**/*.ts', 'vitest.config.ts', 'vitest.config.domain.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
   {

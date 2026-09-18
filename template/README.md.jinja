@@ -35,13 +35,40 @@ Requires: Node.js 22+, pnpm, Docker, `just`, Gitleaks, `jq`, `curl`.
 
 | Tier | Command | When | Scope |
 |---|---|---|---|
-| 1 | `just gauntlet-fast` | after every file edit | typecheck, lint, unit tests, staged-secret scan |
-| 2 | `just gauntlet` | before every commit | architecture isolation, schema drift, reversible migrations, auth matrix, N+1 detection |
+| 1 | `just gauntlet-fast` | after every file edit | typecheck, lint, unit tests, domain suite (`just test-domain`, no Postgres), staged-secret scan |
+| 2 | `just gauntlet` | before every commit | architecture isolation, Stryker suppression justification, schema drift, reversible migrations, auth matrix, N+1 detection |
 | 3 | `just gauntlet-full` | before merge/PR | property tests, OpenAPI contract fuzzing, seed determinism, hold-out integrity, diff mutation |
-| 4 | `just audit` | scheduled | full-domain mutation testing |
+| 4 | `just audit` | scheduled | full mutation testing of `src/domain/**` |
 
-Each tier includes everything in the tier below it. Details on all 8 gates live in
-[`AGENTS.md`](./AGENTS.md#2-los-8-gates-de-seguridad).
+Each tier includes everything in the tier below it. Details on all 9 gates live in
+[`AGENTS.md`](./AGENTS.md#2-los-9-gates-de-seguridad).
+
+## Mutation testing scope
+
+Stryker mutates **only `src/domain/**`** — pure business logic, no I/O, no database, no
+clock, no Fastify dependency. That's an enforced convention, not a suggestion: business
+logic that leaks into an HTTP handler or an infra adapter falls out of mutation scope
+without any gate complaining, which is exactly the failure mode this boundary exists to
+prevent. `dependency-cruiser`'s `domain-isolation` rule blocks `src/domain` from
+importing `infra`/`http`; keeping the *logic* itself there too is on the author and the
+reviewer.
+
+Handlers, adapters, and wiring (`src/http/`, `src/infra/`) are deliberately **not**
+mutated — not because they don't matter, but because they're already covered more
+cheaply and more directly by other gates: Schemathesis audits the OpenAPI contract
+(Gate 3), the auth matrix confirms every route declares `preHandler`/`isPublic`
+(Gate 4), and the N+1 detector (Gate 6) audits query patterns. Mutating those layers
+too would also mean every mutant pays a round trip to Postgres — high cost, low signal,
+for a bug class those other gates already catch more directly.
+
+Per-mutant tests run against `vitest.config.domain.ts` (`src/domain/**/*.test.ts` only,
+no `globalSetup`, no database) with `coverageAnalysis: 'perTest'`, so each mutant runs
+only the tests that actually touch the mutated line — see `just test-domain`. Stryker's
+`incremental: true` (state in `.stryker-tmp/`, gitignored) only helps locally: CI starts
+from a clean checkout every run, so `just gauntlet-full`/`just audit` in CI always run
+in full. See [`AGENTS.md`](./AGENTS.md#mutación-qué-se-prueba-y-qué-no) for the full
+rationale, including why a `// Stryker disable` suppression needs a same-line reason
+(Gate 9) and gets reviewed individually, not rubber-stamped.
 
 ## Enforcement, not just checks
 
@@ -94,7 +121,7 @@ The gauntlet still enforces *how well* the result is built; spec-kit just makes 
 │   ├── hooks/                # Agent + git hooks (Layers 1-2)
 │   └── test-*.sh             # Individual gate implementations
 ├── src/
-│   ├── domain/               # Pure business logic (no infra/http imports)
+│   ├── domain/               # Pure business logic + co-located *.test.ts (mutated by Stryker)
 │   ├── http/                  # Fastify app + routes
 │   └── infra/db/             # Drizzle schema, migrations, client
 ├── tests/
@@ -103,6 +130,8 @@ The gauntlet still enforces *how well* the result is built; spec-kit just makes 
 │   ├── integration/            # Gate 6: N+1 detection
 │   ├── property/                 # fast-check property tests
 │   └── unit/
+├── vitest.config.ts            # Full suite (tests/**)
+├── vitest.config.domain.ts     # Domain-only suite (src/domain/**/*.test.ts), no Postgres
 └── justfile                    # Task orchestration for all tiers
 ```
 

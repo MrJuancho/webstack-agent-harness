@@ -58,6 +58,17 @@ intención en vez de leerla en el código.
      nunca migraba la base de datos de desarrollo de verdad.
    - ¿Se bajó `break` en `stryker.config.mjs`, o algún umbral en
      `justfile`/`scripts/test-*.sh`?
+   - ¿Hay una supresión nueva `// Stryker disable` en el diff? Revísala una por
+     una, no solo que tenga texto después de `:` (Gate 9 solo exige que exista
+     texto, no que sea válido). La razón debe describir un mutante realmente
+     equivalente (un desempate que no cambia la salida observable) -- si es
+     vaga, genérica, o suprime más mutadores de los que el desempate
+     justifica, es una salida de emergencia disfrazada de justificación.
+   - ¿Lógica de negocio (una decisión, no una traducción de entrada/salida)
+     apareció fuera de `src/domain/**` -- en un handler de `src/http/` o un
+     adaptador de `src/infra/`? Ahí no la mutan ni Stryker ni ningún otro
+     gate; es el modo de falla que la convención de capas de AGENTS.md existe
+     para prevenir.
    - ¿Se usó `.skip`/`.todo` en un test de Vitest, o se filtró qué tests
      corren, sin una razón escrita al lado?
    - ¿Se debilitó algún `expect`, o se resolvió una alerta de N+1 subiendo
