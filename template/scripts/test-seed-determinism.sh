@@ -23,10 +23,10 @@ run_seed_cycle() {
   docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE ${TEST_DB};" >/dev/null
 
   # 2. Correr migraciones
-  DATABASE_URL="postgres://postgres:postgres@127.0.0.1:5432/${TEST_DB}" pnpm exec tsx src/infra/db/migrate.ts >/dev/null
+  DATABASE_URL="postgres://postgres:postgres@127.0.0.1:${PG_PORT:-5432}/${TEST_DB}" pnpm exec tsx src/infra/db/migrate.ts >/dev/null
 
   # 3. Ejecutar seed
-  DATABASE_URL="postgres://postgres:postgres@127.0.0.1:5432/${TEST_DB}" pnpm exec tsx src/infra/db/seed.ts >/dev/null
+  DATABASE_URL="postgres://postgres:postgres@127.0.0.1:${PG_PORT:-5432}/${TEST_DB}" pnpm exec tsx src/infra/db/seed.ts >/dev/null
 
   # 4. Volcar datos (solo sentencias INSERT, ordenadas alfabéticamente)
   docker compose exec -T postgres pg_dump -U postgres -d "${TEST_DB}" \
