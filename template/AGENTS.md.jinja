@@ -171,6 +171,29 @@ Para evitar colisiones de dependencias, bloqueo de puertos y sobrescritura de ra
   ```
 - Al terminar, libera el worktree con `just review-clean`.
 
+#### La checklist contra la que te van a revisar
+
+`generator`: saber esto de antemano mejora el diff que entregas, no es
+información reservada para el revisor. El detalle completo, con ejemplos,
+vive en [`.claude/agents/reviewer.md`](./.claude/agents/reviewer.md) -- lo
+que sigue es el resumen. `reviewer` recorre estas ocho letras EN ORDEN,
+reporta cada una explícitamente (incluso sin hallazgo), y cierra con un
+veredicto máquina-legible; un hallazgo en A, C, D o G bloquea por defecto:
+
+| # | Punto | Qué mira |
+|---|---|---|
+| A | Tests debilitados | ¿Se borró, relajó o editó una aserción existente? |
+| B | Tests tautológicos | ¿El test afirma una invariante, o solo lo que la implementación devuelve hoy? |
+| C | Casos especiales | ¿Una rama/guarda nueva satisface un test puntual en vez de corregir la regla general? |
+| D | Marcadores de test desactivado | `.skip`, `.only`, `.todo`, `it.fails`, un `describe` comentado. |
+| E | Errores tragados | `catch` vacío o que devuelve un default, promesa sin `await`, error convertido en log sin propagar. |
+| F | Restricciones vueltas opcionales | Campo obligatorio con default, parámetro que pasó a opcional, tipo ensanchado, umbral subido. |
+| G | Supresiones | Toda supresión nueva de Stryker o ESLint, con juicio sobre si la razón es válida -- no solo que exista. |
+| H | Fuga de capa | Lógica de dominio fuera de `src/domain/**` (incluida una lectura de reloj/aleatoriedad que Gate 10 no atrapó). |
+
+El revisor sigue sin recibir la conversación donde se escribió el diff --
+solo el diff. Eso no cambia con esta checklist.
+
 ### Regla de concurrencia: un árbol de trabajo, un escritor
 
 `generator` puede seguir usando el árbol principal (es el único rol con

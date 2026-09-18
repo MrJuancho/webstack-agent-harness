@@ -110,6 +110,41 @@ if [ -n "$LEFTOVER_WEBSTACK" ]; then
   ERRORS=$((ERRORS + 1))
 fi
 
+# Checklist del Reviewer: no hay forma mecánica de probar la CALIDAD de una
+# revisión, pero sí se puede probar que el prompt con la checklist cerrada
+# (las ocho letras + el bloque de veredicto máquina-legible) realmente
+# llegó al proyecto generado -- no que se perdió en un refactor de
+# copier.yml/_tasks o de la plantilla misma.
+REVIEWER_FILE=$(find "$SCRATCH_DIR/.claude/agents" -maxdepth 1 -name 'reviewer.*' 2>/dev/null | head -1)
+if [ -z "$REVIEWER_FILE" ]; then
+  echo "ERROR: no se encontró .claude/agents/reviewer.* en el proyecto generado." >&2
+  ERRORS=$((ERRORS + 1))
+else
+  REQUIRED_STRINGS=(
+    "### A. Tests debilitados"
+    "### B. Tests tautológicos"
+    "### C. Casos especiales"
+    "### D. Marcadores de test desactivado"
+    "### E. Errores tragados"
+    "### F. Restricciones vueltas opcionales"
+    "### G. Supresiones"
+    "### H. Fuga de capa"
+    "VEREDICTO: APROBADO | CAMBIOS_REQUERIDOS"
+    "HALLAZGOS_BLOQUEANTES"
+  )
+  MISSING_CHECKLIST=()
+  for REQUIRED in "${REQUIRED_STRINGS[@]}"; do
+    grep -qF "$REQUIRED" "$REVIEWER_FILE" || MISSING_CHECKLIST+=("$REQUIRED")
+  done
+  if [ "${#MISSING_CHECKLIST[@]}" -gt 0 ]; then
+    echo "ERROR: a $REVIEWER_FILE le falta(n) parte(s) de la checklist obligatoria del Reviewer:" >&2
+    printf '  - %s\n' "${MISSING_CHECKLIST[@]}" >&2
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "✔ $REVIEWER_FILE tiene las ocho letras de la checklist y el bloque de veredicto."
+  fi
+fi
+
 # Aislamiento de Postgres entre worktrees (scripts/worktree-env.sh): genera
 # el MISMO proyecto (mismo package_name) dos veces, en dos directorios
 # distintos -- simulando dos `git worktree` del mismo repo generado -- y
