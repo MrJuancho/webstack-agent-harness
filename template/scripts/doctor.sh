@@ -26,12 +26,37 @@ check_cmd "jq (Procesador JSON)" "jq"
 check_cmd "curl" "curl"
 check_cmd "sha256sum" "sha256sum"
 
-# 2. Utilidades de base de datos dentro del host/WSL
-if command -v docker >/dev/null 2>&1; then
-  if docker compose exec -T postgres pg_isready >/dev/null 2>&1; then
-    echo "  ✔ PostgreSQL 16 (tmpfs): Conectado y listo"
+# 2. Aislamiento de Postgres por worktree (PG_PORT / COMPOSE_PROJECT_NAME)
+#
+# .env.local es la única fuente de verdad (scripts/worktree-env.sh la
+# deriva del path de este worktree) -- se carga acá de forma defensiva en
+# vez de depender de que `just` ya la haya exportado, porque este script
+# también debe poder correr solo (`bash scripts/doctor.sh`).
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+if [ -f "$REPO_ROOT/.env.local" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$REPO_ROOT/.env.local"
+  set +a
+else
+  echo "  ⚠ .env.local no existe todavía -- ejecutar 'bash scripts/worktree-env.sh' (o 'just setup')"
+fi
+
+if command -v docker >/dev/null 2>&1 && [ -n "${COMPOSE_PROJECT_NAME:-}" ] && [ -n "${PG_PORT:-}" ]; then
+  RUNNING_PORT=$(docker compose -p "$COMPOSE_PROJECT_NAME" port postgres 5432 2>/dev/null | awk -F: '{print $NF}' || true)
+
+  if [ "$RUNNING_PORT" = "$PG_PORT" ]; then
+    if docker compose -p "$COMPOSE_PROJECT_NAME" exec -T postgres pg_isready >/dev/null 2>&1; then
+      echo "  ✔ PostgreSQL 16 (tmpfs): Conectado y listo en PG_PORT=${PG_PORT} (proyecto ${COMPOSE_PROJECT_NAME})"
+    else
+      echo "  ⚠ PostgreSQL 16 (tmpfs): Contenedor de este worktree existe pero no responde aún"
+    fi
+  elif (echo >"/dev/tcp/127.0.0.1/${PG_PORT}") 2>/dev/null; then
+    echo "  ✖ PG_PORT ${PG_PORT}: ocupado por OTRO proceso/worktree, no por el contenedor de ${COMPOSE_PROJECT_NAME}." >&2
+    echo "    Define PG_PORT=<otro-puerto> en el entorno antes de 'bash scripts/worktree-env.sh' para forzar otro valor, o libera el puerto." >&2
+    ERRORS=$((ERRORS + 1))
   else
-    echo "  ⚠ PostgreSQL 16 (tmpfs): Contenedor inactivo o no responde (ejecutar 'just db-up')"
+    echo "  ⚠ PostgreSQL 16 (tmpfs): PG_PORT=${PG_PORT} libre pero contenedor inactivo (ejecutar 'just db-up')"
   fi
 fi
 

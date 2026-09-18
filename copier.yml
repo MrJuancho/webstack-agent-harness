@@ -19,9 +19,11 @@ _skip_if_exists:
 # BRANCH="HEAD":` y su `{{BRANCH}}`), que colisiona con los delimitadores
 # por defecto de Jinja. Si `justfile` se copiara/renderizara como plantilla
 # Jinja, `{{BRANCH}}` se interpretaría como una variable de Copier
-# inexistente y fallaría. En vez de eso, `justfile` se copia literal y las
-# dos sustituciones que necesita (`__PACKAGE_NAME__`, `__DB_NAME__`) se
-# resuelven con `sed` en `_tasks`, después de copiar.
+# inexistente y fallaría. En vez de eso, `justfile` se copia literal y la
+# única sustitución que necesita (`__DB_NAME__`) se resuelve con `sed` en
+# `_tasks`, después de copiar. (El nombre de proyecto de Docker Compose ya
+# no se hardcodea en el justfile -- viene de COMPOSE_PROJECT_NAME en
+# .env.local, uno distinto por worktree, ver scripts/worktree-env.sh.)
 _tasks:
   # git init primero: `just install-hooks` (parte de `just setup`) necesita
   # que exista `.git/hooks/`, y `copier copy` no inicializa git por su
@@ -29,7 +31,7 @@ _tasks:
   # falla en `install-hooks` con "No such file or directory" en un proyecto
   # recién generado.
   - "git init -q || true"
-  - "sed -i 's/__PACKAGE_NAME__/{{ package_name }}/g; s/__DB_NAME__/{{ db_name }}/g' justfile"
+  - "sed -i 's/__DB_NAME__/{{ db_name }}/g' justfile"
   - "command -v bash >/dev/null 2>&1 && bash scripts/generate-pdf.sh || true"
   - "command -v just >/dev/null 2>&1 && just --unstable --fmt 2>/dev/null || true"
 

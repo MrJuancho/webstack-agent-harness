@@ -7,32 +7,33 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Cerrados los dos hallazgos de la auditoría de Capa 3/4: `.github/workflows/verify-template.yml`
-corre `scripts/verify-template.sh` en cada push/PR (job real, verificado en verde:
-https://github.com/MrJuancho/webstack-agent-harness/actions/runs/35197153660).
-Branch protection activada en `main` con `gh api` -- requiere PR + ese check,
-`enforce_admins: true`. Verificado en vivo dos veces: con
-`enforce_admins: false` un push directo del dueño pasó igual ("Bypassed rule
-violations" -- hallazgo real, no hipotético); con `enforce_admins: true`,
-el mismo tipo de push fue rechazado de verdad (GH006). El flujo PR
-completo (branch → push → PR #1 → check verde → squash merge → delete
-branch) se probó de punta a punta, no solo se configuró.
+Aislamiento de Postgres entre worktrees del mismo proyecto generado.
+Nuevo `scripts/worktree-env.sh`: deriva `PG_PORT` (20000 +
+sha256(path-del-worktree) mod 10000, escape hatch si `PG_PORT` ya está en
+el entorno) y `COMPOSE_PROJECT_NAME` (`<package_name>-<hash8>`), los
+escribe en `.env.local` (gitignored, `just setup` regenera). Cambios:
+`docker-compose.yml.jinja` (puerto dinámico, quitado `container_name:`
+fijo -- colisionaba entre worktrees sin importar proyecto), `justfile`
+(`set dotenv-filename := ".env.local"` + `dotenv-load`, quitado todo
+`-p __PACKAGE_NAME__`), TS de infra/db (`dotenv` lee `.env.local` directo
+para que `pnpm`/`vitest` fuera de `just` también apunten bien), `just
+doctor` (falla cerrado si `PG_PORT` está ocupado por algo que no es el
+contenedor de este worktree).
 
-Decisión explícita del usuario: en vez de "requerir CI pero permitir push
-directo" (que GitHub no soporta para un commit nuevo -- el check no puede
-existir antes del primer push), se adoptó PR obligatorio para este repo
-raíz. Documentado en README, sección "Workflow: this repo requires PRs".
-**Esto NO aplica a proyectos generados** (`template/` sigue con push
-directo a `main`, como documenta `template/AGENTS.md.jinja`) -- es
-específico de este repo template.
+Verificado con Docker real: dos "worktrees" generados del mismo
+`package_name` en paths distintos, `docker compose up -d` en ambos a la
+vez (contenedores/redes/puertos distintos vía `docker ps`), `docker
+compose down` en uno no tocó el otro. `scripts/verify-template.sh`
+ampliado (genera el mismo proyecto dos veces, afirma `PG_PORT`/
+`COMPOSE_PROJECT_NAME` distintos) y corrido en verde localmente. No había
+lista de "gaps conocidos" en el repo sobre esto -- nada que borrar.
 
 ## Qué sigue
 
-Nada pendiente de la auditoría de esta sesión. Sin proyecto real generado
-todavía -- el usuario planea empezarlo mañana. Recordatorio para esa
-sesión: cualquier cambio a ESTE repo (el template) ahora necesita PR, no
-push directo -- ver README. Los cambios dentro de un proyecto YA generado
-siguen sin esa restricción.
+PR de este cambio en curso (ver README, "Workflow", para el flujo
+obligatorio de PR de este repo). Una segunda feature (mutación acotada a
+`src/domain/**`) se está preparando en una rama separada, apilada sobre
+esta.
 
 ## Bloqueado / pendiente de decisión
 
