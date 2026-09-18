@@ -1,0 +1,30 @@
+// Fixture usada por scripts/verify-template.sh para probar que la regla
+// ESLint no-restricted-syntax de src/domain/**/*.ts (ver eslint.config.js)
+// realmente aplica -- no que "se ve correcta" leyendo la config. Extensión
+// .ts.txt a propósito: ESLint no debe levantar este archivo por sí solo
+// dentro de ESTE repo (no es .ts); verify-template.sh lo copia como
+// src/domain/__clock_check__.ts dentro del proyecto generado y lo borra
+// después de afirmar el conteo exacto de violaciones.
+//
+// Un caso de cada patrón prohibido (7 violaciones -- Date.now cubre
+// llamada Y referencia por separado), más los casos que SÍ deben pasar.
+// Cada violación se asigna a una const `_`-prefijada (ignorada por
+// @typescript-eslint/no-unused-vars en este mismo config) para que el
+// único error reportado por línea sea el de no-restricted-syntax -- sin
+// esto, la referencia desnuda a Date.now también dispara
+// @typescript-eslint/no-unused-expressions, y el conteo exacto que
+// verify-template.sh afirma dejaría de ser estable.
+
+// --- Violaciones esperadas: 7 ---
+const _a = Date.now();
+const _b = Date.now;
+const _c = new Date();
+const _d = performance.now();
+const _e = Math.random();
+const _f = process.hrtime();
+const _g = Intl.DateTimeFormat();
+
+// --- Casos que SÍ deben pasar: construir un instante a partir de un
+// valor recibido es legítimo, solo leer el reloj no lo es ---
+const _okIso = new Date('2026-01-01T00:00:00.000Z');
+const _okMs = new Date(1735689600000);

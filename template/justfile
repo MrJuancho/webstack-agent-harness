@@ -31,6 +31,7 @@ gauntlet-fast:
     pnpm run lint
     pnpm run test:unit
     just test-domain
+    just check-suppressions
 
 # Suite de dominio puro (src/domain/**/*.test.ts): sin Postgres, sin
 # globalSetup -- ver AGENTS.md, "Convención de capas". La misma config
@@ -38,24 +39,33 @@ gauntlet-fast:
 test-domain:
     pnpm run test:domain
 
-# Gate 9: toda supresión de Stryker (`// Stryker disable ...`) debe llevar
-# su justificación en la misma línea (`: razón`) -- si no, es la salida de
-# emergencia más obvia para ponerse en verde sin resolver nada.
-check-stryker-suppressions:
+# Gate 9: toda supresión en src/domain/ -- de Stryker (`// Stryker
+# disable ...`) o de la regla ESLint de determinismo (`// eslint-disable
+# ... no-restricted-syntax`) -- debe llevar su justificación en la misma
+# línea, o es la salida de emergencia más obvia para ponerse en verde sin
+# resolver nada. Una sola implementación cubre ambos casos: Stryker usa
+# `: razón`; ESLint usa la sintaxis de descripción que la propia
+# herramienta reconoce, `-- razón` (`:` NO sirve para ESLint -- lo
+# "justifica" pero no lo suprime: ESLint intenta resolver
+# "no-restricted-syntax: razón" como nombre de regla, falla, y el error
+# original queda sin suprimir además de sumar uno nuevo -- confirmado a
+# mano, no es una suposición).
+check-suppressions:
     #!/usr/bin/env bash
     set -euo pipefail
-    UNJUSTIFIED=$(grep -rnP 'Stryker disable(?!.*:\s*\S)' src/domain/ 2>/dev/null || true)
+    UNJUSTIFIED=$(grep -rnP \
+      '(Stryker disable(?!.*:\s*\S))|(eslint-disable[a-zA-Z-]*\s+no-restricted-syntax(?!.*--\s*\S))' \
+      src/domain/ 2>/dev/null || true)
     if [ -n "$UNJUSTIFIED" ]; then
-      echo "ERROR Gate 9: supresión de Stryker sin justificación -- agrega ': razón' en la misma línea:" >&2
+      echo "ERROR Gate 9: supresión sin justificación -- Stryker necesita ': razón', eslint-disable necesita '-- razón', en la misma línea:" >&2
       echo "$UNJUSTIFIED" >&2
       exit 1
     fi
-    echo "✔ Gate 9: todas las supresiones de Stryker están justificadas."
+    echo "✔ Gate 9: todas las supresiones (Stryker + ESLint) están justificadas."
 
 # Nivel 2: Verificación estructural, arquitectura, deriva, migraciones e integración
 gauntlet: gauntlet-fast
     pnpm run lint:arch
-    just check-stryker-suppressions
     just db-up
     pnpm run db:migrate
     just db-drift-check
