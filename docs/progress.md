@@ -7,32 +7,33 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Las cuatro features del stack están en `main`: (1) aislamiento de
-Postgres entre worktrees (`scripts/worktree-env.sh`, `.env.local`); (2)
-mutación (Stryker) acotada a `src/domain/**` (`vitest.config.domain.ts`,
-sin Postgres; dos bugs reales de Stryker+pnpm arreglados, ver AGENTS.md,
-"Dos bugs reales...", no reintroducirlos); (3) Gate 10 (ESLint
-`no-restricted-syntax` prohíbe leer reloj/aleatoriedad en
-`src/domain/**`); (4) checklist cerrada del Reviewer (ocho puntos A-H +
-veredicto máquina-legible en `.claude/agents/reviewer.md`, que reemplazó
-por completo la lista abierta de "reward hacking" anterior).
+`verify-template.sh` pasaba en verde mientras el proyecto generado no
+arrancaba contra Docker real: `db-up` tenía un "wait" a Postgres que no
+esperaba de verdad (un intento + `sleep 2` + seguir de largo pasara lo
+que pasara), `db-reset` reutilizaba el contenedor de una corrida anterior
+(tmpfs sobrevive mientras no se pare -- "efímero" era falso), y
+`doctor.sh` solo advertía (⚠, no bloqueaba) si faltaba `.env.local`. Los
+tres arreglados y verificados con Docker real: wait ahora es un loop real
+con `pg_isready -h 127.0.0.1 -p "$PG_PORT"` (nuevo requisito del host:
+`postgresql-client`, agregado a doctor.sh y al CI), `db-reset` hace
+`docker compose down -v` antes de levantar (confirmado a mano: una DB
+marcador de una corrida NO sobrevive a la siguiente), y `doctor.sh` falla
+(✖) si `.env.local` no existe.
 
-Mergear un stack de 4 PRs con `--delete-branch` tuvo dos problemas reales,
-no hipotéticos: (1) GitHub CIERRA (no retargetea) un PR cuyo branch base
-stackeado se borra al mergear el PR anterior -- pasó dos veces, hubo que
-reabrir como PRs nuevos (#5→#7) y retargetear #6 a mano ANTES de que su
-base se borrara; (2) cada merge subsiguiente generó conflictos reales en
-`verify-template.sh`, este archivo, `AGENTS.md.jinja`, `README.md.jinja`
-y `reviewer.md` -- varios PRs insertan bloques en el mismo punto de los
-mismos archivos. Resuelto a mano, conservando ambos lados en cada caso
-(nunca se descartó contenido), verificando `bash scripts/verify-template.sh`
-en verde después de cada resolución antes de completar el merge commit.
+Ese último fix exigía que el CI del proyecto generado corriera
+`worktree-env.sh` antes de `just doctor` (no lo hacía, se habría roto).
+
+Nuevo `scripts/verify-e2e.sh`: genera un proyecto real, corre `just setup
+&& just gauntlet-full` contra Docker real, y afirma sobre el consumidor
+(`.env.local` existe, el contenedor lleva el hash en el nombre, ningún
+archivo tiene "5432" sin `PG_PORT` salvo el ejemplo comentado de
+`.env.example`). Verde dos veces localmente (~60s c/u). Programado +
+disparo manual en `verify-e2e.yml`, no en cada PR. No reproduje el bug #1
+del reporte (`just setup` sí invoca `worktree-env.sh`, ya lo hacía).
 
 ## Qué sigue
 
-Nada pendiente. Los branches del stack ya fusionados están borrados;
-sobrevive `feature/domain-supplements` (rama local vieja, ya contenida en
-`main`, no tiene commits propios -- inofensiva, no hace falta borrarla).
+PR de este cambio pendiente de crear y mergear.
 
 ## Bloqueado / pendiente de decisión
 

@@ -100,13 +100,33 @@ audit:
 # Infraestructura y Base de Datos (namespacing vía COMPOSE_PROJECT_NAME en
 # .env.local -- un proyecto de Compose distinto por worktree, ver arriba)
 db-up:
+    #!/usr/bin/env bash
+    set -euo pipefail
     docker compose up -d
-    @docker compose exec -T postgres pg_isready -U postgres -d __DB_NAME__ || (echo "Esperando a postgres..." && sleep 2)
+    POSTGRES_USER=postgres
+    PORT="${PG_PORT:-5432}"
+    echo "Esperando a Postgres en 127.0.0.1:${PORT}..."
+    for i in $(seq 1 30); do
+      if pg_isready -h 127.0.0.1 -p "$PORT" -U "$POSTGRES_USER" >/dev/null 2>&1; then
+        echo "✔ Postgres listo en 127.0.0.1:${PORT}."
+        exit 0
+      fi
+      sleep 1
+    done
+    echo "ERROR: Postgres no respondió en 127.0.0.1:${PORT} tras 30s -- 'docker compose logs postgres' para diagnosticar." >&2
+    exit 1
 
 db-down:
     docker compose down
 
+# `down -v` primero: sin esto, `db-reset` reutiliza el contenedor Postgres
+# de una corrida anterior si sigue arriba (el tmpfs sobrevive mientras el
+# contenedor no se pare) -- "efímero" sería falso, y el gate de semillas
+# deterministas (Gate 7) estaría midiendo sobre estado que no es
+# realmente fresco. `db-up` en sí (usado por otros gates que no quieren
+# pagar este costo en cada llamada) se queda idempotente.
 db-reset:
+    docker compose down -v
     just db-up
     @docker compose exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS __DB_NAME__;" >/dev/null
     @docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE __DB_NAME__;" >/dev/null

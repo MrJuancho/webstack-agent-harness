@@ -30,7 +30,8 @@ Docker Compose project name (`scripts/worktree-env.sh`, see below), checks requi
 tooling (`just doctor`), installs dependencies, installs the git pre-commit hook, resets
 the dev database, and runs the Level 2 gauntlet to confirm everything is green.
 
-Requires: Node.js 22+, pnpm, Docker, `just`, Gitleaks, `jq`, `curl`.
+Requires: Node.js 22+, pnpm, Docker, `just`, Gitleaks, `jq`, `curl`, `pg_isready`
+(postgresql-client — `just db-up` uses it to wait for Postgres for real, from the host).
 
 ## Running parallel worktrees
 

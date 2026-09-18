@@ -34,8 +34,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install postgresql-client (pg_isready)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Derive worktree-local PG_PORT/COMPOSE_PROJECT_NAME
+        run: bash scripts/worktree-env.sh
 
       - name: System Doctor
         run: just doctor

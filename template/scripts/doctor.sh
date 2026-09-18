@@ -25,6 +25,11 @@ check_cmd "Gitleaks (Gate 8)" "gitleaks"
 check_cmd "jq (Procesador JSON)" "jq"
 check_cmd "curl" "curl"
 check_cmd "sha256sum" "sha256sum"
+# pg_isready (cliente de PostgreSQL, paquete postgresql-client): lo usa
+# `just db-up` para esperar de verdad a que Postgres responda en el host
+# antes de migrar -- sin esto, `db-up` falla con "command not found" en
+# vez de con un mensaje que diga qué instalar.
+check_cmd "pg_isready (postgresql-client)" "pg_isready"
 
 # 2. Aislamiento de Postgres por worktree (PG_PORT / COMPOSE_PROJECT_NAME)
 #
@@ -39,7 +44,16 @@ if [ -f "$REPO_ROOT/.env.local" ]; then
   source "$REPO_ROOT/.env.local"
   set +a
 else
-  echo "  ⚠ .env.local no existe todavía -- ejecutar 'bash scripts/worktree-env.sh' (o 'just setup')"
+  # Fail-closed real, no una advertencia decorativa: sin .env.local no hay
+  # PG_PORT/COMPOSE_PROJECT_NAME, así que todo lo que dependa de ellos
+  # (docker-compose.yml, drizzle.config.ts, el cliente de infra/db) cae de
+  # vuelta a defaults hardcodeados -- exactamente el escenario de colisión
+  # entre worktrees que scripts/worktree-env.sh existe para prevenir. Un
+  # "⚠" acá era la única señal de que el entorno no estaba listo, y no
+  # detenía nada: `just setup` seguía de largo hacia `just gauntlet` sobre
+  # un entorno a medio configurar.
+  echo "  ✖ .env.local no existe -- ejecutar 'bash scripts/worktree-env.sh' (o 'just setup', que ya lo hace primero)" >&2
+  ERRORS=$((ERRORS + 1))
 fi
 
 if command -v docker >/dev/null 2>&1 && [ -n "${COMPOSE_PROJECT_NAME:-}" ] && [ -n "${PG_PORT:-}" ]; then

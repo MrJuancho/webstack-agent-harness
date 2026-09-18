@@ -105,7 +105,18 @@ added after `.claude/` had already moved into `template/` mid-session, so — un
 edit to an existing settings file, which hot-reloads — a session needs to be
 **restarted** to pick up a settings.json that didn't exist at session start.
 
-There's no meta-test suite beyond this (what `gauntlet-template` has, with its own
-`pyproject.toml`/`pytest` at the root) — `verify-template.sh` is a fast mechanism-level
-check, not full coverage. Worth building if this template starts changing often enough
-for that gap to matter; see `docs/progress.md` for current status.
+`verify-template.sh` is deliberately a fast mechanism-level check, not full coverage —
+and that gap already cost a real regression once: it passed green on a working tree
+where the generated project's own `just setup` failed against real Docker (worktree
+isolation env vars never resolved in time, a Postgres wait that didn't actually wait,
+`db-reset` silently reusing a previous run's container). `verify-template.sh` cannot
+catch that class of bug by design — it never installs dependencies or touches Docker.
+
+[`scripts/verify-e2e.sh`](./scripts/verify-e2e.sh) closes that gap: it generates a real
+project, runs `just setup && just gauntlet-full` against real Docker and real Postgres,
+and asserts on the actual consumer — `.env.local` exists after setup, the running
+container's name carries the worktree hash, no generated file has a literal `5432`
+that isn't tied to `PG_PORT`. It's slow on purpose (Docker + a full gauntlet, several
+minutes), so it doesn't run on every push/PR like `verify-template.sh` does — see
+[`.github/workflows/verify-e2e.yml`](./.github/workflows/verify-e2e.yml) (scheduled
+daily + manual dispatch) instead.

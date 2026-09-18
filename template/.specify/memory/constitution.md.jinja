@@ -68,8 +68,10 @@ an unfinished slice.
 Stack: Node.js 22 LTS, TypeScript 5, Fastify 5 + TypeBox + Swagger, Drizzle ORM,
 PostgreSQL 16 (tmpfs-backed, ephemeral by design), Vitest, Stryker Mutator, fast-check,
 Schemathesis, Gitleaks, `just` as the task runner. Target environment is WSL2/Linux with
-Docker Compose; the compose project is unified under the name `{{ package_name }}`
-so `db-up`/`db-down`/`db-reset` never collide with other local stacks. Every endpoint
+Docker Compose; the compose project name and host port are derived per-worktree
+(`scripts/worktree-env.sh`, `PG_PORT`/`COMPOSE_PROJECT_NAME` in `.env.local`) so
+`db-up`/`db-down`/`db-reset` never collide with other worktrees of this same project,
+not just with unrelated local stacks. Every endpoint
 registered in `src/http/app.ts` MUST declare a TypeBox schema, including its `401`
 contract if it requires auth, or explicit `config: { isPublic: true }` if it does not
 (Gate 3, Gate 4).
