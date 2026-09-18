@@ -1,9 +1,17 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { config } from 'dotenv';
 import * as schema from './schema.js';
 
+config();
+// PG_PORT/COMPOSE_PROJECT_NAME son específicos de este worktree -- ver
+// scripts/worktree-env.sh. Se cargan aparte y con prioridad sobre .env
+// para que el default de abajo apunte al Postgres de ESTE worktree.
+config({ path: '.env.local', override: true });
+
 const connectionString =
-  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:5432/{{ db_name }}';
+  process.env.DATABASE_URL ??
+  `postgres://postgres:postgres@127.0.0.1:${process.env.PG_PORT ?? '5432'}/{{ db_name }}`;
 
 type QueryListener = (query: string) => void;
 let activeQueryListener: QueryListener | null = null;

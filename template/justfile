@@ -1,10 +1,19 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+# Aislamiento por worktree: PG_PORT y COMPOSE_PROJECT_NAME viven en
+# .env.local (scripts/worktree-env.sh los deriva del path del worktree).
+# `just` los carga como variables de entorno para toda receta -- incluidos
+# los `docker compose` de más abajo y los scripts bash que invocan -- sin
+# necesitar `-p` explícito ni volver a leer el archivo en cada script.
+set dotenv-filename := ".env.local"
+set dotenv-load := true
+
 default:
     @just --list
 
 # Inicialización determinista del entorno para nuevos clones o agentes
 setup:
+    bash scripts/worktree-env.sh
     just doctor
     pnpm install --frozen-lockfile
     just install-hooks
@@ -88,18 +97,19 @@ gauntlet-full: gauntlet
 audit:
     pnpm run mutate:full
 
-# Infraestructura y Base de Datos (Proyecto unificado)
+# Infraestructura y Base de Datos (namespacing vía COMPOSE_PROJECT_NAME en
+# .env.local -- un proyecto de Compose distinto por worktree, ver arriba)
 db-up:
-    docker compose -p __PACKAGE_NAME__ up -d
-    @docker compose -p __PACKAGE_NAME__ exec -T postgres pg_isready -U postgres -d __DB_NAME__ || (echo "Esperando a postgres..." && sleep 2)
+    docker compose up -d
+    @docker compose exec -T postgres pg_isready -U postgres -d __DB_NAME__ || (echo "Esperando a postgres..." && sleep 2)
 
 db-down:
-    docker compose -p __PACKAGE_NAME__ down
+    docker compose down
 
 db-reset:
     just db-up
-    @docker compose -p __PACKAGE_NAME__ exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS __DB_NAME__;" >/dev/null
-    @docker compose -p __PACKAGE_NAME__ exec -T postgres psql -U postgres -c "CREATE DATABASE __DB_NAME__;" >/dev/null
+    @docker compose exec -T postgres psql -U postgres -c "DROP DATABASE IF EXISTS __DB_NAME__;" >/dev/null
+    @docker compose exec -T postgres psql -U postgres -c "CREATE DATABASE __DB_NAME__;" >/dev/null
     pnpm run db:migrate
 
 db-generate:

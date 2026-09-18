@@ -25,11 +25,32 @@ layers so the spec never drifts from the code.
 just setup
 ```
 
-This bootstraps a fresh clone end-to-end: checks required tooling (`just doctor`),
-installs dependencies, installs the git pre-commit hook, resets the dev database, and
-runs the Level 2 gauntlet to confirm everything is green.
+This bootstraps a fresh clone end-to-end: derives a worktree-local Postgres port and
+Docker Compose project name (`scripts/worktree-env.sh`, see below), checks required
+tooling (`just doctor`), installs dependencies, installs the git pre-commit hook, resets
+the dev database, and runs the Level 2 gauntlet to confirm everything is green.
 
 Requires: Node.js 22+, pnpm, Docker, `just`, Gitleaks, `jq`, `curl`.
+
+## Running parallel worktrees
+
+Two `git worktree`s of this same generated project can run `just gauntlet` at the same
+time without interfering with each other — no shared state file, no manual port
+bookkeeping. `scripts/worktree-env.sh` derives, from the worktree's own path
+(`git rev-parse --show-toplevel`), a `PG_PORT` and a `COMPOSE_PROJECT_NAME` unique to
+that worktree, and writes them to `.env.local` (gitignored). `just setup` regenerates it
+automatically; `just` loads it for every recipe (`set dotenv-filename := ".env.local"`),
+so `docker compose up`/`down` and every gate script pick up the right project without
+any `-p` flag. The TypeScript side (`drizzle.config.ts`, `src/infra/db/client.ts`, the
+migrate/seed scripts) reads `.env.local` directly too, so a direct `pnpm run db:migrate`
+or `vitest run` outside of `just` still targets the right instance.
+
+Each worktree's Postgres runs in its own Docker Compose project — separate containers,
+network, and host port — so `docker compose down` in one worktree never touches
+another's. `just doctor` fails closed if `PG_PORT` is occupied by something that isn't
+this worktree's own container, naming the port and pointing at the `PG_PORT=<port>`
+environment-variable escape hatch (set it before running `worktree-env.sh` to force a
+specific value instead of the derived one).
 
 ## The verification tiers
 
@@ -50,11 +71,12 @@ clock, no Fastify dependency. That's an enforced convention, not a suggestion: b
 logic that leaks into an HTTP handler or an infra adapter falls out of mutation scope
 without any gate complaining, which is exactly the failure mode this boundary exists to
 prevent. `dependency-cruiser`'s `domain-isolation` rule blocks `src/domain` from
-importing `infra`/`http`; an ESLint rule (Gate 10, `no-restricted-syntax`, runs in
-`gauntlet-fast`) blocks reading the wall clock or a non-deterministic random source from
-inside `src/domain` — a single intermittent read there breaks fast-check's
-reproducibility and makes Stryker's mutants run differently between runs, the worst
-possible failure mode because it passes green most of the time.
+importing `infra`/`http`; keeping the *logic* itself there too is on the author and the
+reviewer. An ESLint rule (Gate 10, `no-restricted-syntax`, runs in `gauntlet-fast`)
+blocks reading the wall clock or a non-deterministic random source from inside
+`src/domain` — a single intermittent read there breaks fast-check's reproducibility and
+makes Stryker's mutants run differently between runs, the worst possible failure mode
+because it passes green most of the time.
 
 Handlers, adapters, and wiring (`src/http/`, `src/infra/`) are deliberately **not**
 mutated — not because they don't matter, but because they're already covered more
@@ -122,6 +144,7 @@ The gauntlet still enforces *how well* the result is built; spec-kit just makes 
 │   └── progress.md           # Session handoff — overwritten, not accumulated
 ├── scripts/
 │   ├── doctor.sh            # Fail-closed tooling check
+│   ├── worktree-env.sh      # Derives PG_PORT/COMPOSE_PROJECT_NAME into .env.local
 │   ├── hooks/                # Agent + git hooks (Layers 1-2)
 │   └── test-*.sh             # Individual gate implementations
 ├── src/

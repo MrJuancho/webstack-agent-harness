@@ -54,8 +54,11 @@ One deliberate exception: `template/justfile` is **not** `.jinja`-suffixed. `jus
 recipe syntax uses `{{ }}` for parameters (see `review-start BRANCH="HEAD":` and its
 `{{BRANCH}}`), which collides with Jinja's default delimiters — rendering it as a
 template would try to resolve `{{BRANCH}}` as a missing Copier variable and fail. It's
-copied literally instead, and its two real substitutions (`__PACKAGE_NAME__`,
-`__DB_NAME__`) are resolved with `sed` in `copier.yml`'s `_tasks`, after copying.
+copied literally instead, and its one real substitution (`__DB_NAME__`) is resolved with
+`sed` in `copier.yml`'s `_tasks`, after copying. The Docker Compose project name is
+*not* hardcoded this way — it comes from `COMPOSE_PROJECT_NAME` in `.env.local`, derived
+per-worktree by `scripts/worktree-env.sh` (see "Running parallel worktrees" in the
+generated project's own README for why).
 
 ## Workflow: this repo requires PRs, generated projects don't
 

@@ -37,11 +37,13 @@ set -uo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 SOURCE_DIR=$(mktemp -d)
 SCRATCH_DIR=$(mktemp -d)
+WORKTREE_A_DIR=$(mktemp -d)
+WORKTREE_B_DIR=$(mktemp -d)
 LINT_JSON_FILE=$(mktemp)
 ERRORS=0
 
 cleanup() {
-  rm -rf "$SOURCE_DIR" "$SCRATCH_DIR"
+  rm -rf "$SOURCE_DIR" "$SCRATCH_DIR" "$WORKTREE_A_DIR" "$WORKTREE_B_DIR"
   rm -f "$LINT_JSON_FILE"
 }
 trap cleanup EXIT INT TERM
@@ -105,6 +107,61 @@ LEFTOVER_WEBSTACK=$(grep -rli "webstack" "$SCRATCH_DIR" 2>/dev/null \
 if [ -n "$LEFTOVER_WEBSTACK" ]; then
   echo "ERROR: quedaron referencias literales a 'webstack' en el proyecto generado:" >&2
   echo "$LEFTOVER_WEBSTACK" >&2
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Aislamiento de Postgres entre worktrees (scripts/worktree-env.sh): genera
+# el MISMO proyecto (mismo package_name) dos veces, en dos directorios
+# distintos -- simulando dos `git worktree` del mismo repo generado -- y
+# afirma que cada uno deriva un PG_PORT y un COMPOSE_PROJECT_NAME propios.
+# Sin esto, dos worktrees del mismo proyecto chocan en el puerto del host
+# de Postgres y en los nombres de recursos de Docker Compose.
+if command -v jq >/dev/null 2>&1; then
+  echo "==> Verificando aislamiento de Postgres entre worktrees (scripts/worktree-env.sh)..."
+
+  for WT_DIR in "$WORKTREE_A_DIR" "$WORKTREE_B_DIR"; do
+    rm -rf "$WT_DIR"
+    WT_COPY_OUTPUT=$(copier copy "$SOURCE_DIR" "$WT_DIR" \
+      --data project_name="Verify Worktree" \
+      --data package_name="verify-worktree" \
+      --data db_name="verify_worktree_dev" \
+      --data github_owner="MrJuancho" \
+      --trust --defaults 2>&1)
+    WT_COPY_CODE=$?
+    if [ "$WT_COPY_CODE" -ne 0 ]; then
+      echo "ERROR: 'copier copy' falló generando el worktree de prueba en $WT_DIR (código $WT_COPY_CODE):" >&2
+      echo "$WT_COPY_OUTPUT" >&2
+      ERRORS=$((ERRORS + 1))
+      continue
+    fi
+    ( cd "$WT_DIR" && bash scripts/worktree-env.sh ) >/dev/null 2>&1
+  done
+
+  if [ -f "$WORKTREE_A_DIR/.env.local" ] && [ -f "$WORKTREE_B_DIR/.env.local" ]; then
+    # shellcheck disable=SC1090
+    PG_PORT_A=$(. "$WORKTREE_A_DIR/.env.local" 2>/dev/null; echo "$PG_PORT")
+    PROJECT_A=$(. "$WORKTREE_A_DIR/.env.local" 2>/dev/null; echo "$COMPOSE_PROJECT_NAME")
+    PG_PORT_B=$(. "$WORKTREE_B_DIR/.env.local" 2>/dev/null; echo "$PG_PORT")
+    PROJECT_B=$(. "$WORKTREE_B_DIR/.env.local" 2>/dev/null; echo "$COMPOSE_PROJECT_NAME")
+
+    if [ -z "$PG_PORT_A" ] || [ -z "$PROJECT_A" ] || [ -z "$PG_PORT_B" ] || [ -z "$PROJECT_B" ]; then
+      echo "ERROR: worktree-env.sh no escribió PG_PORT/COMPOSE_PROJECT_NAME en uno de los dos worktrees de prueba." >&2
+      ERRORS=$((ERRORS + 1))
+    elif [ "$PG_PORT_A" = "$PG_PORT_B" ]; then
+      echo "ERROR: dos worktrees del mismo proyecto derivaron el mismo PG_PORT ($PG_PORT_A) -- chocarían en el puerto del host." >&2
+      ERRORS=$((ERRORS + 1))
+    elif [ "$PROJECT_A" = "$PROJECT_B" ]; then
+      echo "ERROR: dos worktrees del mismo proyecto derivaron el mismo COMPOSE_PROJECT_NAME ($PROJECT_A) -- chocarían en contenedores/redes/volúmenes." >&2
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "✔ Worktrees aislados: PG_PORT $PG_PORT_A vs $PG_PORT_B, COMPOSE_PROJECT_NAME $PROJECT_A vs $PROJECT_B."
+    fi
+  else
+    echo "ERROR: worktree-env.sh no generó .env.local en uno de los dos worktrees de prueba." >&2
+    ERRORS=$((ERRORS + 1))
+  fi
+else
+  echo "ERROR: 'jq' no está instalado -- no se puede verificar el aislamiento de Postgres entre worktrees. Bloqueo preventivo." >&2
   ERRORS=$((ERRORS + 1))
 fi
 
