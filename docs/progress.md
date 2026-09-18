@@ -7,30 +7,33 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Mutación (Stryker) acotada de verdad a `src/domain/**`: el glob `mutate`
-ya lo estaba, pero el testRunner apuntaba a `vitest.config.ts` completo
-(con Postgres). Ahora apunta a `vitest.config.domain.ts` (nuevo, sin
-Postgres, sin globalSetup). Nuevo `just test-domain` (<1s), Gate 9
-(`check-stryker-suppressions`: supresión de Stryker sin justificar falla
-`gauntlet`), tests de dominio co-ubicados en `src/domain/*.test.ts`.
+Dos features mergeadas a `main` en la misma sesión (PRs stackeados,
+mergeados en orden): (1) aislamiento de Postgres entre worktrees
+(`scripts/worktree-env.sh`, `.env.local` con `PG_PORT`/
+`COMPOSE_PROJECT_NAME` por worktree, verificado con Docker real); (2)
+mutación (Stryker) acotada de verdad a `src/domain/**` (testRunner ahora
+apunta a `vitest.config.domain.ts`, sin Postgres; nuevo `just
+test-domain`; Gate 9 exige justificación de supresiones). Dos bugs reales
+de Stryker+pnpm encontrados y arreglados en el camino -- ver AGENTS.md,
+"Dos bugs reales que este trabajo encontró", no reintroducirlos.
 
-**Dos bugs reales encontrados corriendo Stryker de verdad (documentados
-en AGENTS.md, no reintroducir):** faltaba `.npmrc` (`node-linker=hoisted`)
--- sin él pnpm no encuentra `@stryker-mutator/vitest-runner`,
-`mutate:full`/`mutate:diff` fallaban siempre en cualquier proyecto
-generado. Y `scripts/mutate-diff.sh` usaba pathspecs
-`'src/domain/**/*.ts'` que git nunca matcheaba -- `mutate:diff` (en
-`gauntlet-full`, corre antes de cada PR) siempre decía "Sin cambios
-detectados" con cambios de dominio reales sin commitear. Ambos arreglados
-y verificados con corridas reales: antes `mutate:full` no corría nada;
-después `just audit` ~5s en verde, score 76.47%→100% con 2 tests nuevos y
-2 supresiones justificadas (mutantes genuinamente equivalentes).
+Sesiones posteriores (aún stackeadas encima, pendientes de merge):
+Gate 10 (ESLint `no-restricted-syntax` prohíbe leer reloj/aleatoriedad en
+`src/domain/**`, ver AGENTS.md) y la checklist cerrada del Reviewer (ocho
+puntos A-H + veredicto máquina-legible, ver `.claude/agents/reviewer.md`).
+
+Al mergear PR #4 (mutación) después de PR #3 (worktrees), hubo conflicto
+real en `scripts/verify-template.sh` y este archivo -- ambos PRs insertan
+bloques en el mismo punto del script. Se resolvió a mano conservando
+ambos bloques de verificación (worktrees primero, luego mutate-glob/
+test-domain). Lección para las siguientes fusiones del stack: esperar
+`mergeable` en verde antes de fusionar cada PR, no asumirlo por haber
+pasado CI antes de que el anterior mergeara.
 
 ## Qué sigue
 
-PR de este cambio en curso, en paralelo con otro PR (aislamiento de
-Postgres entre worktrees, rama `feat/worktree-postgres-isolation`) --
-ambos independientes entre sí, ninguno depende del otro para funcionar.
+Mergear en orden los PRs restantes del stack (clock-lint, luego
+reviewer-checklist), resolviendo el mismo tipo de conflicto si aparece.
 
 ## Bloqueado / pendiente de decisión
 

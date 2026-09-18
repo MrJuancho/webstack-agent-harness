@@ -1,12 +1,18 @@
 import { defineConfig } from 'drizzle-kit';
-import 'dotenv/config';
+import { config } from 'dotenv';
+
+config();
+// PG_PORT es específico de este worktree -- ver scripts/worktree-env.sh.
+config({ path: '.env.local', override: true });
 
 export default defineConfig({
   schema: './src/infra/db/schema.ts',
   out: './src/infra/db/migrations',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:5432/{{ db_name }}',
+    url:
+      process.env.DATABASE_URL ??
+      `postgres://postgres:postgres@127.0.0.1:${process.env.PG_PORT ?? '5432'}/{{ db_name }}`,
   },
   strict: true,
   verbose: false,
