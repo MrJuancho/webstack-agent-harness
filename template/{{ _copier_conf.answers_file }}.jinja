@@ -1,0 +1,8 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY.
+# Esto es lo que `copier update` usa para saber de qué commit de la
+# plantilla salió este proyecto y qué respuestas se dieron -- sin este
+# archivo, `copier update` falla con "Cannot update because cannot obtain
+# old template references" (confirmado a mano: fallaba en todo proyecto
+# generado desde este template hasta ahora, porque este archivo no
+# existía).
+{{ _copier_answers|to_nice_yaml -}}
