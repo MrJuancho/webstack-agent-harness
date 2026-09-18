@@ -4,7 +4,12 @@ import os from 'node:os';
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
   packageManager: 'pnpm',
-  reporters: ['clear-text', 'progress'],
+  // 'json' alimenta scripts/run-mutation.sh: Stryker no reporta en su
+  // tabla cuántos mutantes fueron IGNORADOS (`// Stryker disable`), así
+  // que ese script lee el reporte JSON para imprimirlo explícitamente
+  // después de cada corrida -- un score de 100% puede estar escondiendo
+  // que una fracción real de los mutantes nunca corrió.
+  reporters: ['clear-text', 'progress', 'json'],
   testRunner: 'vitest',
   // perTest: cada mutante corre solo los tests que de verdad tocan la
   // línea mutada, no la suite entera. El acelerador más grande que hay,

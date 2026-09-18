@@ -7,33 +7,39 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Incidente real: `copier copy` sin `--vcs-ref` servía un snapshot de ~30
-commits (tag `v0.1.0`) a cualquiera, por tags viejos que shadoweaban
-`main`. Borrar los tags (con confirmación del usuario) arregló el
-síntoma, NO el mecanismo -- el día que este repo vuelva a tener tags (uso
-maduro y deseable de una plantilla versionada), la misma trampa vuelve.
-La protección durable, más barata: este template NUNCA escribía
-`.copier-answers.yml` (le faltaba el archivo estándar
-`{{ _copier_conf.answers_file }}.jinja` que Copier exige que la propia
-plantilla provea) -- `copier update` estaba roto para TODO proyecto
-generado desde siempre, confirmado a mano. Arreglado. `doctor.sh` ahora
-compara `_commit` contra el HEAD remoto real de la plantilla (advierte
-por defecto, falla con `DOCTOR_STRICT_TEMPLATE_FRESHNESS=1`).
-`scripts/verify-e2e.sh` reescrito para clonar el remoto real sin
-`--vcs-ref` (antes probaba el working tree local, el camino que no
-habría atrapado el incidente) y afirmar que el `_commit` resultante
-coincide con el HEAD remoto real. README raíz: recomienda `--vcs-ref`
-explícito siempre; nunca borrar tags como arreglo futuro (rompe
-`copier update` de quien ya generó contra ellos).
+Error real de reporte (no del código): dije que los 3 arreglos de PR #8
+estaban re-confirmados, pero la evidencia que mostré venía de un proyecto
+generado contra `main`/`757da37` (anterior al merge de #8), no contra el
+branch real -- el usuario lo detectó por las líneas de log exactas
+(`pg_isready` contra `/var/run/postgresql` en vez de `127.0.0.1:PG_PORT`;
+`db-reset` sin `docker compose down -v`). Re-verificado de cero contra
+`_commit` = tip real de `fix/e2e-generation-bugs`: los 3 arreglos SÍ
+funcionan (output crudo de `db-up`/`db-reset` inspeccionado directamente,
+no un resumen). Lección: nunca confiar en una señal agregada sin leer la
+evidencia cruda que resume.
 
-Los tres arreglos de PR #8 (`pg_isready` real, `db-reset` con `down -v`,
-`doctor` fail-closed) quedaron re-confirmados contra el branch local --
-las corridas anteriores habían sido, sin darme cuenta, contra el
-snapshot viejo. Verificados de nuevo, en verde.
+Dos hallazgos nuevos del usuario, ambos arreglados y verificados:
+
+1. El "100.00%" de Stryker escondía que 4 de 17 mutantes instrumentados
+   nunca corrieron (ignorados vía `// Stryker disable`, justificados por
+   Gate 9, pero el score no lo decía). `scripts/run-mutation.sh` (nuevo,
+   envuelve `stryker run` en `mutate:diff` y `mutate:full`) lee el reporte
+   JSON y siempre imprime cuántos fueron ignorados, con archivo:línea y
+   motivo -- pase o falle la corrida. Requiere reporter `'json'` en
+   `stryker.config.mjs` (ya agregado).
+2. `just audit` reutilizaba el `.stryker-tmp/incremental.json` de
+   `mutate:diff` corrido segundos antes en la misma sesión -- contradice
+   la promesa de "exhaustivo". `mutate:full`/audit ahora usa un archivo
+   separado (`.stryker-tmp/incremental-audit.json`, vía `--full` en
+   `run-mutation.sh`). Confirmado a mano: tras un `audit`, un `mutate:diff`
+   inmediato NO reusa su caché (corre completo), y `mutate:diff` sigue
+   reusando su PROPIA caché entre corridas propias.
 
 ## Qué sigue
 
-Mergear PR #8. Correr `verify-e2e.sh` real (remoto pusheado) antes.
+Commitear y pushear estos dos arreglos de mutación a `fix/e2e-generation-bugs`
+(PR #8 sigue abierto). Mergear PR #8 solo con confirmación explícita del
+usuario -- no asumir.
 
 ## Bloqueado / pendiente de decisión
 
