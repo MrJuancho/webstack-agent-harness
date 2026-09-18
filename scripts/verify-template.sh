@@ -23,12 +23,15 @@
 #   4. Quedan referencias literales a "webstack" en la salida -- el mismo
 #      tipo de fuga que ADR-0003 encontró en dos scripts de gates.
 #
-# No requiere Docker ni `pnpm install`: verifica el mecanismo de plantilla,
-# no que la app de ejemplo pase su propio gauntlet (eso requeriría Docker +
-# red + varios minutos, demasiado caro para correr en cada turno de agente
-# o cada commit). Deliberadamente más barato que un `just gauntlet` real --
-# ver docs/progress.md para el estado de la suite de meta-tests completa
-# que sí lo haría.
+# No requiere Docker: verifica el mecanismo de plantilla, no que la app de
+# ejemplo pase su propio gauntlet (eso requeriría Docker + red + varios
+# minutos, demasiado caro para correr en cada turno de agente o cada
+# commit). SÍ corre un `pnpm install` (sin Docker) para un único check
+# barato: que `just test-domain` pasa sin ningún contenedor levantado --
+# es justo la propiedad que esa suite existe para garantizar, y no hay
+# forma de confirmarla sin ejecutar Vitest de verdad. Deliberadamente más
+# barato que un `just gauntlet` real -- ver docs/progress.md para el
+# estado de la suite de meta-tests completa que sí lo haría.
 set -uo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
@@ -157,6 +160,46 @@ if command -v jq >/dev/null 2>&1; then
   fi
 else
   echo "ERROR: 'jq' no está instalado -- no se puede verificar el aislamiento de Postgres entre worktrees. Bloqueo preventivo." >&2
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Alcance de la mutación (Stryker): el glob `mutate` del proyecto generado
+# no debe cubrir nada fuera de src/domain. Si se filtra un glob más
+# amplio, Stryker vuelve a mutar handlers/adaptadores -- el costo alto y
+# la señal baja que esta convención existe para evitar -- sin que nada lo
+# marque.
+MUTATE_BLOCK=$(sed -n '/mutate:\s*\[/,/\]/p' "$SCRATCH_DIR/stryker.config.mjs" 2>/dev/null || true)
+if [ -z "$MUTATE_BLOCK" ]; then
+  echo "ERROR: no se encontró el bloque 'mutate:' en stryker.config.mjs del proyecto generado." >&2
+  ERRORS=$((ERRORS + 1))
+else
+  BAD_GLOBS=$(printf '%s\n' "$MUTATE_BLOCK" | grep -oP "'[^']*'" | tr -d "'" | grep -vE '^!?src/domain/' || true)
+  if [ -n "$BAD_GLOBS" ]; then
+    echo "ERROR: stryker.config.mjs 'mutate' incluye rutas fuera de src/domain:" >&2
+    echo "$BAD_GLOBS" >&2
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "✔ stryker.config.mjs: 'mutate' está acotado a src/domain."
+  fi
+fi
+
+# `just test-domain` debe pasar sin ningún contenedor Docker levantado --
+# nunca corremos `just db-up` ni `docker compose` en este script, así que
+# un test-domain en verde acá prueba justo eso: la suite de dominio no
+# depende de Postgres para nada.
+if command -v just >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1; then
+  echo "==> Verificando 'just test-domain' sin Postgres levantado (proyecto generado)..."
+  TEST_DOMAIN_LOG=$(cd "$SCRATCH_DIR" && pnpm install --frozen-lockfile 2>&1 && just test-domain 2>&1)
+  TEST_DOMAIN_CODE=$?
+  if [ "$TEST_DOMAIN_CODE" -ne 0 ]; then
+    echo "ERROR: 'just test-domain' falló en el proyecto generado (sin Docker levantado):" >&2
+    echo "$TEST_DOMAIN_LOG" >&2
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "✔ 'just test-domain' pasa sin ningún contenedor Docker levantado."
+  fi
+else
+  echo "ERROR: 'just' y/o 'pnpm' no están instalados -- no se puede verificar 'just test-domain'. Bloqueo preventivo." >&2
   ERRORS=$((ERRORS + 1))
 fi
 

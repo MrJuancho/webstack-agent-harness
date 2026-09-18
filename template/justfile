@@ -39,10 +39,32 @@ gauntlet-fast:
     pnpm run typecheck
     pnpm run lint
     pnpm run test:unit
+    just test-domain
+
+# Suite de dominio puro (src/domain/**/*.test.ts): sin Postgres, sin
+# globalSetup -- ver AGENTS.md, "Convención de capas". La misma config
+# (vitest.config.domain.ts) que usa Stryker para mutar rápido.
+test-domain:
+    pnpm run test:domain
+
+# Gate 9: toda supresión de Stryker (`// Stryker disable ...`) debe llevar
+# su justificación en la misma línea (`: razón`) -- si no, es la salida de
+# emergencia más obvia para ponerse en verde sin resolver nada.
+check-stryker-suppressions:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    UNJUSTIFIED=$(grep -rnP 'Stryker disable(?!.*:\s*\S)' src/domain/ 2>/dev/null || true)
+    if [ -n "$UNJUSTIFIED" ]; then
+      echo "ERROR Gate 9: supresión de Stryker sin justificación -- agrega ': razón' en la misma línea:" >&2
+      echo "$UNJUSTIFIED" >&2
+      exit 1
+    fi
+    echo "✔ Gate 9: todas las supresiones de Stryker están justificadas."
 
 # Nivel 2: Verificación estructural, arquitectura, deriva, migraciones e integración
 gauntlet: gauntlet-fast
     pnpm run lint:arch
+    just check-stryker-suppressions
     just db-up
     pnpm run db:migrate
     just db-drift-check
@@ -58,7 +80,10 @@ gauntlet-full: gauntlet
     just test-holdouts
     pnpm run mutate:diff
 
-# Nivel 4: Auditoría nocturna exhaustiva
+# Nivel 4: Auditoría nocturna exhaustiva -- mutación completa (no solo el
+# diff) del dominio puro. `incremental` en stryker.config.mjs solo ayuda
+# en local: en CI (runner limpio en cada corrida) esto siempre corre
+# completo, ver AGENTS.md.
 audit:
     pnpm run mutate:full
 

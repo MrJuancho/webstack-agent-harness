@@ -7,33 +7,33 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Aislamiento de Postgres entre worktrees del mismo proyecto generado.
-Nuevo `scripts/worktree-env.sh`: deriva `PG_PORT` (20000 +
-sha256(path-del-worktree) mod 10000, escape hatch si `PG_PORT` ya está en
-el entorno) y `COMPOSE_PROJECT_NAME` (`<package_name>-<hash8>`), los
-escribe en `.env.local` (gitignored, `just setup` regenera). Cambios:
-`docker-compose.yml.jinja` (puerto dinámico, quitado `container_name:`
-fijo -- colisionaba entre worktrees sin importar proyecto), `justfile`
-(`set dotenv-filename := ".env.local"` + `dotenv-load`, quitado todo
-`-p __PACKAGE_NAME__`), TS de infra/db (`dotenv` lee `.env.local` directo
-para que `pnpm`/`vitest` fuera de `just` también apunten bien), `just
-doctor` (falla cerrado si `PG_PORT` está ocupado por algo que no es el
-contenedor de este worktree).
+Dos features mergeadas a `main` en la misma sesión (PRs stackeados,
+mergeados en orden): (1) aislamiento de Postgres entre worktrees
+(`scripts/worktree-env.sh`, `.env.local` con `PG_PORT`/
+`COMPOSE_PROJECT_NAME` por worktree, verificado con Docker real); (2)
+mutación (Stryker) acotada de verdad a `src/domain/**` (testRunner ahora
+apunta a `vitest.config.domain.ts`, sin Postgres; nuevo `just
+test-domain`; Gate 9 exige justificación de supresiones). Dos bugs reales
+de Stryker+pnpm encontrados y arreglados en el camino -- ver AGENTS.md,
+"Dos bugs reales que este trabajo encontró", no reintroducirlos.
 
-Verificado con Docker real: dos "worktrees" generados del mismo
-`package_name` en paths distintos, `docker compose up -d` en ambos a la
-vez (contenedores/redes/puertos distintos vía `docker ps`), `docker
-compose down` en uno no tocó el otro. `scripts/verify-template.sh`
-ampliado (genera el mismo proyecto dos veces, afirma `PG_PORT`/
-`COMPOSE_PROJECT_NAME` distintos) y corrido en verde localmente. No había
-lista de "gaps conocidos" en el repo sobre esto -- nada que borrar.
+Sesiones posteriores (aún stackeadas encima, pendientes de merge):
+Gate 10 (ESLint `no-restricted-syntax` prohíbe leer reloj/aleatoriedad en
+`src/domain/**`, ver AGENTS.md) y la checklist cerrada del Reviewer (ocho
+puntos A-H + veredicto máquina-legible, ver `.claude/agents/reviewer.md`).
+
+Al mergear PR #4 (mutación) después de PR #3 (worktrees), hubo conflicto
+real en `scripts/verify-template.sh` y este archivo -- ambos PRs insertan
+bloques en el mismo punto del script. Se resolvió a mano conservando
+ambos bloques de verificación (worktrees primero, luego mutate-glob/
+test-domain). Lección para las siguientes fusiones del stack: esperar
+`mergeable` en verde antes de fusionar cada PR, no asumirlo por haber
+pasado CI antes de que el anterior mergeara.
 
 ## Qué sigue
 
-PR de este cambio en curso (ver README, "Workflow", para el flujo
-obligatorio de PR de este repo). Una segunda feature (mutación acotada a
-`src/domain/**`) se está preparando en una rama separada, apilada sobre
-esta.
+Mergear en orden los PRs restantes del stack (clock-lint, luego
+reviewer-checklist), resolviendo el mismo tipo de conflicto si aparece.
 
 ## Bloqueado / pendiente de decisión
 

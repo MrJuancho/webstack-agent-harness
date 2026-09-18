@@ -22,14 +22,14 @@ Todo agente debe ejecutar el nivel adecuado según el ciclo de trabajo:
 
 | Nivel | Comando | Cuándo Ejecutar | Alcance Técnico |
 |---|---|---|---|
-| **Nivel 1** | `just gauntlet-fast` | Tras cada edición de archivo | Gitleaks (staging), `tsc --noEmit`, ESLint y Vitest unitario. |
-| **Nivel 2** | `just gauntlet` | Antes de commitear cambios | Aislamiento arquitectónico (depcruise), PostgreSQL tmpfs, deriva DDL (Gate 2), reversibilidad Up/Down (Gate 1), matriz de auth (Gate 4) y detector N+1 (Gate 6). |
-| **Nivel 3** | `just gauntlet-full` | Antes de solicitar revisión/PR | Property tests con arbitrarios de dominio real, Schemathesis (Gate 3), semillas deterministas (Gate 7), hold-outs SHA-256 (Gate 5) y mutación sobre diff (Stryker). |
-| **Nivel 4** | `just audit` | Tareas programadas / auditoría | Mutación exhaustiva de todo el dominio. |
+| **Nivel 1** | `just gauntlet-fast` | Tras cada edición de archivo | Gitleaks (staging), `tsc --noEmit`, ESLint, Vitest unitario y la suite de dominio (`just test-domain`, <1s, sin Postgres). |
+| **Nivel 2** | `just gauntlet` | Antes de commitear cambios | Aislamiento arquitectónico (depcruise), Gate 9 (justificación de supresiones Stryker), PostgreSQL tmpfs, deriva DDL (Gate 2), reversibilidad Up/Down (Gate 1), matriz de auth (Gate 4) y detector N+1 (Gate 6). |
+| **Nivel 3** | `just gauntlet-full` | Antes de solicitar revisión/PR | Property tests con arbitrarios de dominio real, Schemathesis (Gate 3), semillas deterministas (Gate 7), hold-outs SHA-256 (Gate 5) y mutación sobre diff de dominio (Stryker, `mutate:diff`). |
+| **Nivel 4** | `just audit` | Tareas programadas / auditoría | Mutación exhaustiva (no solo el diff) de `src/domain/**` completo. |
 
 ---
 
-## 2. Los 8 Gates de Seguridad
+## 2. Los 9 Gates de Seguridad
 
 1. **Gate 1 (Migraciones Reversibles):** Todo `.sql` requiere su `.down.sql`. El rollback no debe dejar residuos DDL en `pg_dump`.
 2. **Gate 2 (Schema Drift):** Modificaciones en `src/infra/db/schema.ts` requieren correr `just db-generate`. No puede haber discrepancia entre TypeScript y SQL.
@@ -39,6 +39,67 @@ Todo agente debe ejecutar el nivel adecuado según el ciclo de trabajo:
 6. **Gate 6 (Detector N+1):** Las consultas relacionadas deben resolverse vía joins o batching (`inArray`). Iterar consultas dentro de bucles sobrepasa el límite de `assertMaxQueries` y rompe el gate.
 7. **Gate 7 (Semillas Deterministas):** Prohibido usar `Date.now()`, `new Date()` sin fecha fija, o UUIDs dinámicos en `seed.ts`. Las firmas SHA-256 de volcados consecutivos deben ser idénticas.
 8. **Gate 8 (Prevención de Secretos):** Gitleaks escanea el área de preparación en cada ciclo rápido.
+9. **Gate 9 (Justificación de Supresiones Stryker):** Toda `// Stryker disable ...` requiere razón en la misma línea (`: texto`). Un mutante equivalente real (un desempate que no cambia la salida observable) es motivo legítimo de supresión -- pero también es la salida de emergencia más obvia para ponerse en verde sin resolver nada, así que no se acepta sin justificar. `just gauntlet` (`check-stryker-suppressions`) la exige con un grep; el Reviewer revisa cada supresión nueva del diff una por una, no solo que el texto exista.
+
+---
+
+## Mutación: qué se prueba y qué no
+
+Stryker (`just gauntlet-full` con `mutate:diff`, `just audit` con `mutate:full`)
+muta **solo `src/domain/**`** -- lógica de negocio pura, sin I/O, sin base de datos,
+sin reloj, sin dependencias de Fastify. Es una regla, no una sugerencia: si lógica de
+negocio se filtra a un handler HTTP o a un adaptador de infraestructura, sale del
+alcance de la mutación sin que ningún gate se queje -- ese es el modo de falla que esta
+convención existe para prevenir. `dependency-cruiser` (`domain-isolation` en
+`.dependency-cruiser.js`) ya bloquea que `src/domain` importe de `infra`/`http`; queda
+en el autor y en el Reviewer que la lógica en sí (no solo los imports) viva ahí.
+
+Handlers, adaptadores y cableado (`src/http/`, `src/infra/`) **no** se mutan -- no
+porque no importen, sino porque ya tienen cobertura de otro tipo, más barata y de
+señal más directa para esas capas: Schemathesis audita el contrato OpenAPI (Gate 3),
+la matriz de auth confirma que cada ruta declara `preHandler`/`isPublic` (Gate 4), y el
+detector de N+1 (Gate 6) audita el patrón de queries. Mutar esas capas también pagaría
+un round trip a Postgres por mutante -- costo alto, señal baja, para un tipo de bug que
+esos otros gates ya atrapan de forma más directa.
+
+La suite que Stryker corre por mutante es `vitest.config.domain.ts` (solo
+`src/domain/**/*.test.ts`, sin `globalSetup` ni conexión a base de datos) -- ver
+`just test-domain`. `coverageAnalysis: 'perTest'` hace que cada mutante corra
+únicamente los tests que tocan la línea mutada, no la suite entera.
+
+`incremental: true` en `stryker.config.mjs` (estado en `.stryker-tmp/`, gitignored)
+**solo ayuda en local**: en CI cada corrida parte de un checkout limpio, así que el
+archivo de estado nunca sobrevive entre corridas y `just gauntlet-full`/`just audit`
+en CI siempre corren completo. No hay que cachear `.stryker-tmp/` en CI para esto --
+este template no corre `just audit` como tarea programada; si un proyecto generado
+agrega ese cron, cachear `.stryker-tmp/` con clave por rama sí vuelve a tener sentido.
+
+### Dos bugs reales que este trabajo encontró (no los reintroduzcas)
+
+Verificados a mano ejecutando Stryker de verdad, no solo leyendo el código -- ambos
+hacían que la mutación pareciera correr pero no corriera nada, en cualquier proyecto
+generado desde este template, sin importar el alcance del `mutate`:
+
+1. **`.npmrc` con `node-linker=hoisted` es obligatorio con pnpm.** Sin él,
+   `@stryker-mutator/core` no encuentra `@stryker-mutator/vitest-runner` -- el
+   layout "isolated" por defecto de pnpm le da a cada paquete su propia vista
+   privada de `node_modules`, que solo contiene SUS PROPIAS dependencias
+   declaradas, no los devDependencies hermanos del proyecto. `pnpm run
+   mutate:full`/`mutate:diff` fallaban con "Cannot find TestRunner plugin
+   vitest. In fact, no TestRunner plugins were loaded" el 100% de las veces,
+   pasara lo que pasara con `mutate`/`coverageAnalysis`/el vitest config.
+2. **`scripts/mutate-diff.sh` usaba pathspecs `'src/domain/**/*.ts'` que git
+   nunca matcheaba.** Sin magia `:(glob)` explícita, `**` no es un glob de
+   varios niveles para `git diff`/`git ls-files` -- el resultado era siempre
+   vacío, así que `mutate:diff` (parte de `just gauntlet-full`, el gate de
+   Nivel 3 que corre antes de cada PR) imprimía "Sin cambios detectados" y
+   pasaba en verde incluso con cambios de dominio reales sin commitear. El
+   fix usa el directorio (`'src/domain'`) como pathspec, sin glob.
+
+Si vas a tocar cualquiera de los dos (el `.npmrc` o los pathspecs de
+`mutate-diff.sh`), corre `pnpm run mutate:full` de verdad con un cambio real
+en `src/domain/` antes de confiar en que el gate sigue funcionando -- ambos
+bugs "se veían bien" leyendo el código.
 
 ---
 
@@ -83,6 +144,12 @@ Para evitar colisiones de dependencias, bloqueo de puertos y sobrescritura de ra
 - Trabaja en el directorio raíz del repositorio.
 - Opera siempre en una rama de feature (`git checkout -b feature/<nombre>`).
 - Debe correr `just gauntlet-fast` continuamente y commitear únicamente con `just gauntlet` en verde.
+- **Regla, no sugerencia:** la lógica de negocio vive en `src/domain/**` -- pura, sin
+  I/O, sin base de datos, sin reloj, sin `Fastify`. Los handlers en `src/http/` y los
+  adaptadores en `src/infra/` solo traducen entrada/salida; no deciden. Si una regla de
+  negocio termina escrita dentro de un handler, ya salió del alcance de la mutación
+  (ver "Mutación: qué se prueba y qué no") sin que ningún gate lo marque -- ese es el
+  modo de falla exacto que esta regla existe para prevenir.
 
 ### Rol: Reviewer (Auditoría de Código)
 
