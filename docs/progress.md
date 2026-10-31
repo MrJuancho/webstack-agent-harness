@@ -7,40 +7,32 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-Error real de reporte (no del código): dije que los 3 arreglos de PR #8
-estaban re-confirmados, pero la evidencia que mostré venía de un proyecto
-generado contra `main`/`757da37` (anterior al merge de #8), no contra el
-branch real -- el usuario lo detectó por las líneas de log exactas
-(`pg_isready` contra `/var/run/postgresql` en vez de `127.0.0.1:PG_PORT`;
-`db-reset` sin `docker compose down -v`). Re-verificado de cero contra
-`_commit` = tip real de `fix/e2e-generation-bugs`: los 3 arreglos SÍ
-funcionan (output crudo de `db-up`/`db-reset` inspeccionado directamente,
-no un resumen). Lección: nunca confiar en una señal agregada sin leer la
-evidencia cruda que resume.
+PR #8 (e2e contra Docker real + arreglos de mutación) y PR #9 mergeados.
+PR #9: `Verify E2E` NUNCA había pasado en CI (0 de 42 corridas) --
+`verify-e2e.yml` no instalaba gitleaks, que `doctor.sh` exige. Confirmado
+contra el log real de CI, no inferido. Además, en el `ci.yml` GENERADO,
+`gitleaks/gitleaks-action@v2` corta con exit 1 antes de instalar nada si el
+dueño del repo es una Organization sin `GITLEAKS_LICENSE` (de pago) --
+verificado en el código fuente de la action. Era también el ÚNICO escaneo
+de secretos real en CI: Gate 8 (`protect --staged`) escanea 0 commits en un
+checkout limpio. Reemplazado por binario fijado 8.24.3 + paso explícito
+`gitleaks git --redact --verbose .` sobre toda la historia.
 
-Dos hallazgos nuevos del usuario, ambos arreglados y verificados:
-
-1. El "100.00%" de Stryker escondía que 4 de 17 mutantes instrumentados
-   nunca corrieron (ignorados vía `// Stryker disable`, justificados por
-   Gate 9, pero el score no lo decía). `scripts/run-mutation.sh` (nuevo,
-   envuelve `stryker run` en `mutate:diff` y `mutate:full`) lee el reporte
-   JSON y siempre imprime cuántos fueron ignorados, con archivo:línea y
-   motivo -- pase o falle la corrida. Requiere reporter `'json'` en
-   `stryker.config.mjs` (ya agregado).
-2. `just audit` reutilizaba el `.stryker-tmp/incremental.json` de
-   `mutate:diff` corrido segundos antes en la misma sesión -- contradice
-   la promesa de "exhaustivo". `mutate:full`/audit ahora usa un archivo
-   separado (`.stryker-tmp/incremental-audit.json`, vía `--full` en
-   `run-mutation.sh`). Confirmado a mano: tras un `audit`, un `mutate:diff`
-   inmediato NO reusa su caché (corre completo), y `mutate:diff` sigue
-   reusando su PROPIA caché entre corridas propias.
+Verificado: `Verify E2E` en verde sobre `main` (`_commit=a3a7087`, log crudo
+leído). El escaneo nuevo, local sobre un proyecto generado: historia limpia
+exit 0, clave AWS plantada exit 1, sigue exit 1 tras borrar el archivo.
 
 ## Qué sigue
 
-Commitear y pushear estos dos arreglos de mutación a `fix/e2e-generation-bugs`
-(PR #8 sigue abierto). Mergear PR #8 solo con confirmación explícita del
-usuario -- no asumir.
+Probar el `ci.yml` generado corriendo en GitHub de verdad: generar un
+proyecto, empujarlo a un repo privado temporal, leer el log crudo; luego un
+PR con un secreto falso que el paso "Secret scan" debe bloquear. Pendiente
+porque crear el repo requiere permiso explícito del usuario (el modo auto
+lo bloqueó). Borrarlo después requiere el scope `delete_repo` en `gh`.
+
+Menor: las actions fijadas en `@v3`/`@v4` corren en Node 20 (deprecado,
+solo warning hoy).
 
 ## Bloqueado / pendiente de decisión
 
-Ninguno.
+Permiso para crear el repo temporal de prueba de CI.
