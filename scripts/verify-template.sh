@@ -56,7 +56,12 @@ command -v copier >/dev/null 2>&1 || {
 rsync -a --exclude='.git' --exclude='node_modules' --exclude='.env' "$REPO_ROOT/" "$SOURCE_DIR/"
 
 echo "==> Verificando el template con un copier copy real (estado actual del working tree)..."
-COPY_OUTPUT=$(copier copy "$SOURCE_DIR" "$SCRATCH_DIR" \
+# init.defaultBranch=master forzado (vía GIT_CONFIG_*, solo para este
+# proceso) para que el check de rama de abajo no dependa de cómo esté
+# configurado git en la máquina que corre esto: es justo la configuración
+# que hacía nacer el proyecto en `master`.
+COPY_OUTPUT=$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=init.defaultBranch GIT_CONFIG_VALUE_0=master \
+  copier copy "$SOURCE_DIR" "$SCRATCH_DIR" \
   --data project_name="Verify Template" \
   --data package_name="verify-template" \
   --data db_name="verify_template_dev" \
@@ -73,6 +78,16 @@ fi
 if [ ! -d "$SCRATCH_DIR/.git" ]; then
   echo "ERROR: el proyecto generado no tiene .git/ -- regresión del hallazgo de ADR-0003 (git init en _tasks)." >&2
   ERRORS=$((ERRORS + 1))
+else
+  # El ci.yml generado solo dispara en `main`: un proyecto que nace en
+  # otra rama tiene CI muerto sin ningún aviso.
+  GEN_BRANCH=$(git -C "$SCRATCH_DIR" symbolic-ref --short HEAD 2>/dev/null || echo "?")
+  if [ "$GEN_BRANCH" = "main" ]; then
+    echo "✔ El proyecto generado nace en 'main' (aun con init.defaultBranch=master), la rama en la que dispara su ci.yml."
+  else
+    echo "ERROR: el proyecto generado nace en '$GEN_BRANCH', no en 'main' -- su ci.yml (push/PR a main) nunca correría." >&2
+    ERRORS=$((ERRORS + 1))
+  fi
 fi
 
 # Exclusiones conocidas y legítimas, no leftovers:

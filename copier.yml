@@ -30,7 +30,15 @@ _tasks:
   # cuenta. Verificado con una corrida real: sin este paso, `just setup`
   # falla en `install-hooks` con "No such file or directory" en un proyecto
   # recién generado.
-  - "git init -q || true"
+  #
+  # `-b main`, no un `git init` pelado: sin `init.defaultBranch=main` en la
+  # máquina del usuario (el default de git sigue siendo `master`, y el de
+  # los runners de GitHub también), el proyecto nacía en `master` -- y el
+  # `ci.yml` generado solo dispara en push/PR a `main`: CI nunca corría.
+  # Confirmado con un push real a un repo de prueba. El fallback con
+  # `symbolic-ref` cubre git < 2.28 (sin `-b`). Si el destino ya es un repo
+  # git, `git init` re-inicializa sin tocar su rama actual.
+  - "git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; } || true"
   - "sed -i 's/__DB_NAME__/{{ db_name }}/g' justfile"
   - "command -v bash >/dev/null 2>&1 && bash scripts/generate-pdf.sh || true"
   - "command -v just >/dev/null 2>&1 && just --unstable --fmt 2>/dev/null || true"
