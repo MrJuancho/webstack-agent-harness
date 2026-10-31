@@ -24,14 +24,17 @@ Verificado (logs crudos leídos): `Verify E2E` verde sobre `main`
 escaneó 1 commit (Gate 8: 0); PR con clave AWS falsa falla en "Secret scan"
 (`aws-access-token`, REDACTED) y el resto se salta.
 
+Esa prueba halló otro bug, arreglado en PR #11: `_tasks` corría `git init`
+pelado, así que sin `init.defaultBranch=main` el proyecto nacía en `master`
+y su `ci.yml` (solo `main`) nunca corría. Ahora `git init -q -b main` (con
+fallback para git < 2.28); `verify-template.sh` lo verifica forzando
+`init.defaultBranch=master`. Confirmado generando desde el remoto
+(`_commit=f2d18f5`): nace en `main`. Repo temporal de prueba ya borrado.
+
 ## Qué sigue
 
-Bug nuevo hallado en esa prueba: `_tasks` en `copier.yml` corre `git init`
-pelado -- sin `init.defaultBranch=main` el proyecto nace en `master`, y el
-`ci.yml` generado solo dispara en `main`: CI nunca corre. Arreglo probable:
-`git init -q -b main` (git >= 2.28).
-
-(El repo temporal de prueba ya fue borrado.) Menor: actions en `@v3`/`@v4` corren en Node 20 (deprecado, solo warning).
+Nada pendiente. Menor: actions en `@v3`/`@v4` corren en Node 20
+(deprecado, solo warning hoy).
 
 ## Bloqueado / pendiente de decisión
 
