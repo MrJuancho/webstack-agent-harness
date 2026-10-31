@@ -31,8 +31,7 @@ pelado -- sin `init.defaultBranch=main` el proyecto nace en `master`, y el
 `ci.yml` generado solo dispara en `main`: CI nunca corre. Arreglo probable:
 `git init -q -b main` (git >= 2.28).
 
-Borrar `MrJuancho/ci-smoke-20261031` (requiere scope `delete_repo` en `gh`).
-Menor: actions en `@v3`/`@v4` corren en Node 20 (deprecado, solo warning).
+(El repo temporal de prueba ya fue borrado.) Menor: actions en `@v3`/`@v4` corren en Node 20 (deprecado, solo warning).
 
 ## Bloqueado / pendiente de decisión
 
