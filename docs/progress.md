@@ -33,8 +33,7 @@ fallback para git < 2.28); `verify-template.sh` lo verifica forzando
 
 ## Qué sigue
 
-Nada pendiente. Menor: actions en `@v3`/`@v4` corren en Node 20
-(deprecado, solo warning hoy).
+Nada pendiente. Menor: actions `@v3`/`@v4` corren en Node 20 (deprecado).
 
 ## Bloqueado / pendiente de decisión
 
