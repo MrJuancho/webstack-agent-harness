@@ -45,7 +45,10 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-for TOOL in copier just pnpm docker jq git; do
+# gitleaks y pg_isready los exige el proyecto GENERADO (doctor.sh), no
+# este script -- chequearlos acá convierte un fallo enterrado en el log de
+# 'just setup' en un error de una línea al principio.
+for TOOL in copier just pnpm docker jq git gitleaks pg_isready; do
   command -v "$TOOL" >/dev/null 2>&1 || {
     echo "ERROR: '$TOOL' no está instalado -- no se puede correr la verificación end-to-end. Bloqueo preventivo." >&2
     exit 1
