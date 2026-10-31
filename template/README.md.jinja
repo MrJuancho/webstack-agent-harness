@@ -115,8 +115,9 @@ sure of that:
    fails *open* — see `AGENTS.md` for the classification and why it matters.
 2. **Git pre-commit** (`scripts/hooks/pre-commit.sh`, installed via `just install-hooks`)
    — runs `gauntlet-fast` before any local commit.
-3. **CI** (`.github/workflows/ci.yml`) — runs `just doctor` + `just gauntlet-full` on a
-   clean container for every push/PR to `main`.
+3. **CI** (`.github/workflows/ci.yml`) — scans the full git history for secrets
+   (`gitleaks git`), then runs `just doctor` + `just gauntlet-full` on a clean container
+   for every push/PR to `main`.
 4. **Branch protection** — `main` requires the CI check green before merge.
 
 ## Spec-driven development

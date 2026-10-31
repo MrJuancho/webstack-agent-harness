@@ -29,10 +29,24 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
+      # Binario fijado, no gitleaks/gitleaks-action: la action corta con
+      # exit 1 ANTES de instalar nada si el dueño del repo es una
+      # Organization sin el secreto de pago GITLEAKS_LICENSE -- un proyecto
+      # generado bajo una org fallaría en su primer push.
       - name: Install Gitleaks
-        uses: gitleaks/gitleaks-action@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.24.3
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
+      # El escaneo de secretos REAL de CI. Gate 8 (`gitleaks protect
+      # --staged` en gauntlet-fast) es para pre-commit: en un checkout
+      # limpio no hay nada en stage y escanea 0 commits. Esto escanea toda
+      # la historia (fetch-depth: 0 arriba).
+      - name: Secret scan (git history)
+        run: gitleaks git --redact --verbose .
 
       - name: Install postgresql-client (pg_isready)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
