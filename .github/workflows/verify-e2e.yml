@@ -40,6 +40,17 @@ jobs:
       - name: Install just
         uses: extractions/setup-just@v2
 
+      # El proyecto generado exige gitleaks (doctor.sh, Gate 8 en
+      # gauntlet-fast); sin esto `just setup` muere en el runner limpio
+      # aunque todo pase en una máquina que ya lo tiene instalado.
+      - name: Install Gitleaks
+        env:
+          GITLEAKS_VERSION: 8.24.3
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+
       - name: Install postgresql-client (pg_isready)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
 
