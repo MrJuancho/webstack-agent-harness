@@ -1,5 +1,5 @@
-import { config } from 'dotenv';
 import { SignJWT } from 'jose';
+import { loadEnvFiles } from '../config.js';
 import { encodeJwtSecret, requireJwtSecret } from './jwt-verifier.js';
 
 // Emite un token de corta duración firmado con el JWT_SECRET de este
@@ -8,8 +8,7 @@ import { encodeJwtSecret, requireJwtSecret } from './jwt-verifier.js';
 // de login -- emitir tokens de verdad le toca al proveedor de identidad
 // del proyecto.
 
-config();
-config({ path: '.env.local', override: true });
+loadEnvFiles();
 
 if (process.env.NODE_ENV === 'production') {
   console.error('dev-token: deshabilitado con NODE_ENV=production.');

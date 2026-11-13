@@ -1,0 +1,14 @@
+# Solo entra a la imagen lo que el build necesita: nada de secretos
+# locales, dependencias del host ni artefactos de tests.
+.git
+.github
+node_modules
+dist
+.env
+.env.*
+coverage
+reports
+.stryker-tmp
+tests
+docs
+*.log

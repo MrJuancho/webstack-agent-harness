@@ -1,15 +1,12 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { config } from 'dotenv';
+import { loadEnvFiles, readDatabaseConfig } from '../config.js';
 import { auditLogs, tasks } from './schema.js';
 
-config();
-// PG_PORT es específico de este worktree -- ver scripts/worktree-env.sh.
-config({ path: '.env.local', override: true });
-
-const connectionString =
-  process.env.DATABASE_URL ??
-  `postgres://postgres:postgres@127.0.0.1:${process.env.PG_PORT ?? '5432'}/{{ db_name }}`;
+// La URL sale validada de src/infra/config.ts (DATABASE_URL, o el
+// Postgres de ESTE worktree vía PG_PORT fuera de producción).
+loadEnvFiles();
+const connectionString = readDatabaseConfig(process.env).url;
 
 const sql = postgres(connectionString, { max: 1 });
 const db = drizzle(sql);
