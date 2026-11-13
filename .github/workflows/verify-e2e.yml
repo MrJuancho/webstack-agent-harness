@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.3.3 # setup-uv ya no publica tag flotante de major (desde v8)
 
       - name: Install copier
         run: uv tool install copier
