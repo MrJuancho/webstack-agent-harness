@@ -7,29 +7,34 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-PR #12 mergeado: todas las actions salen de Node 20 (deprecado) a majors
-en node24 -- checkout v7, setup-node v7, pnpm/action-setup v6, setup-uv
-v10.3.3, setup-just v4 (composite sobre setup-crate node24). Notas:
+Plan acordado con el usuario: 4 mejoras al template, en orden, y recién
+después soporte multi-base de datos. PR #14 mergeado con las dos primeras:
 
-- setup-uv ya NO publica tag flotante de major (desde v8): `@v10` no
-  resuelve y el job muere en "Set up job". Va fijado a versión exacta.
-- `ci.yml` generado: sin `version:` en pnpm/action-setup. Desde v4, si
-  difiere de `packageManager` el paso falla; ahora la única fuente de
-  verdad es `package.json`. Los workflows de la raíz sí lo conservan (no
-  hay package.json en la raíz).
-- El token de `gh` no tiene scope `workflow`: push HTTPS de archivos en
-  `.github/workflows/` a un repo nuevo es rechazado. Usar remoto SSH.
+1. **Capa de aplicación + feature de referencia `tasks`** (ADR-0004):
+   `src/application/`, `src/composition.ts`, reglas de capa en
+   dependency-cruiser, y `verify-template.sh` prueba que cada regla muerde.
+2. **`requireAuth` verifica un JWT real y falla cerrado** (ADR-0005): sin
+   `JWT_SECRET` (>= 32 chars) el servidor no arranca; `worktree-env.sh` lo
+   genera en `.env.local`; `just dev-token` emite uno de prueba.
 
-Verificado (logs crudos leídos): `Verify Template` y `Verify E2E` verdes
-en la rama; `ci.yml` generado en repo privado temporal
-(`MrJuancho/ci-smoke-20261113`, `_commit=425e062`): todo verde, pnpm
-resolvió 9.15.4 desde `packageManager`, secret scan 1 commit, cero avisos
-de Node 20. Repo temporal ya borrado.
+Verificado (logs leídos): `Verify Template` verde en el PR; `Verify E2E`
+verde sobre `main` (`_commit=efdbb1b`), hold-outs sellados incluidos.
+
+Notas: en CI depcruise colorea su salida (quitar ANSI antes de un grep);
+en esta máquina (WSL) falta `pg_isready` -- instalar `postgresql-client`
+para correr en local el gauntlet de un proyecto generado.
 
 ## Qué sigue
 
-Nada pendiente.
+3. Básicos de producción: logging (hoy `logger: false`), apagado ordenado,
+   validación de variables de entorno al arrancar, Dockerfile de la app.
+   (El manejador central de errores ya entró en el PR #14.)
+4. Renovate o Dependabot, en este repo y en los proyectos generados.
+5. Después, multi-base de datos: primero aislar los comandos de Postgres
+   de los gates detrás de una interfaz, luego UNA base más.
 
 ## Bloqueado / pendiente de decisión
 
-Ninguno.
+Decisión del usuario (ADR-0005): `requireAuth` corre en `preHandler`, tras
+validar el esquema -- sin token y con cuerpo inválido responde 400, no 401.
+Moverlo a `onRequest` toca Gate 4, la constitución y quizá los hold-outs.
