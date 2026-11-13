@@ -20,11 +20,9 @@ después soporte multi-base de datos. PR #14 mergeado con las dos primeras:
 Verificado (logs leídos): `Verify Template` verde en el PR; `Verify E2E`
 verde sobre `main` (`_commit=efdbb1b`), hold-outs sellados incluidos.
 
-Notas para no redescubrir:
-- En CI depcruise colorea su salida: todo grep sobre ella debe quitar los
-  códigos ANSI primero (falló así el primer intento del PR #14).
-- En esta máquina (WSL) no está `pg_isready`: para correr el gauntlet de
-  un proyecto generado en local hace falta `postgresql-client`.
+Notas: en CI depcruise colorea su salida (quitar ANSI antes de un grep);
+en esta máquina (WSL) falta `pg_isready` -- instalar `postgresql-client`
+para correr en local el gauntlet de un proyecto generado.
 
 ## Qué sigue
 
@@ -33,12 +31,11 @@ Notas para no redescubrir:
    (El manejador central de errores ya entró en el PR #14.)
 4. Actualización automática de dependencias (Renovate o Dependabot), en
    este repo y en los proyectos generados.
-5. Después: multi-base de datos -- primero aislar los comandos de Postgres
+5. Después, multi-base de datos: primero aislar los comandos de Postgres
    de los gates detrás de una interfaz, luego UNA base más.
 
 ## Bloqueado / pendiente de decisión
 
-Decisión del usuario (ADR-0005): `requireAuth` corre en `preHandler`,
-después de validar el esquema -- sin token y con cuerpo inválido responde
-400, no 401. Moverlo a `onRequest` toca Gate 4, la constitución y quizá
-los hold-outs (que el agente no puede leer).
+Decisión del usuario (ADR-0005): `requireAuth` corre en `preHandler`, tras
+validar el esquema -- sin token y con cuerpo inválido responde 400, no 401.
+Moverlo a `onRequest` toca Gate 4, la constitución y quizá los hold-outs.
