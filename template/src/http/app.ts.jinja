@@ -33,11 +33,24 @@ export interface BuildAppOptions {
   // JWT_SECRET) -- y si JWT_SECRET falta, buildApp lanza: no hay modo de
   // arrancar sin autenticación de verdad.
   verifyToken?: TokenVerifier;
+  // Nivel de log de pino. Por defecto 'silent': los tests construyen la
+  // app sin ruido; src/http/server.ts pasa el nivel de la configuración
+  // que validó src/main.ts.
+  logLevel?: string;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
+  const logLevel = options.logLevel ?? 'silent';
   const app = Fastify({
-    logger: false,
+    logger:
+      logLevel === 'silent'
+        ? false
+        : {
+            level: logLevel,
+            // Fastify no loguea headers por defecto; esto cubre el caso de
+            // que alguien agregue `req.headers` a un log más adelante.
+            redact: ['req.headers.authorization', 'req.headers.cookie'],
+          },
   }).withTypeProvider<TypeBoxTypeProvider>();
 
   if (options.onRoute) {

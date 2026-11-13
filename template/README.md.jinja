@@ -66,7 +66,7 @@ came from a stale template snapshot is a real incident, not a hypothetical one.
 |---|---|---|---|
 | 1 | `just gauntlet-fast` | after every file edit | typecheck, lint (incl. domain determinism), unit tests, domain suite (`just test-domain`, no Postgres), suppression justification, staged-secret scan |
 | 2 | `just gauntlet` | before every commit | architecture isolation, schema drift, reversible migrations, auth matrix, N+1 detection |
-| 3 | `just gauntlet-full` | before merge/PR | property tests, OpenAPI contract fuzzing, seed determinism, hold-out integrity, diff mutation |
+| 3 | `just gauntlet-full` | before merge/PR | property tests, OpenAPI contract fuzzing, seed determinism, hold-out integrity, diff mutation, production image check |
 | 4 | `just audit` | scheduled | full mutation testing of `src/domain/**` |
 
 Each tier includes everything in the tier below it. Details on all 10 gates live in
@@ -99,6 +99,29 @@ and a subject (`sub`) are all required. The server **refuses to start** without 
 The project verifies tokens; it does not issue them. Login belongs to your identity
 provider. To verify against one (JWKS/OIDC), replace the adapter in
 `src/infra/auth/jwt-verifier.ts` — routes only depend on the `TokenVerifier` port.
+
+## Running in production
+
+```bash
+docker build -t {{ package_name }} .
+docker run -e JWT_SECRET=... -e DATABASE_URL=postgres://... -p 3000:3000 {{ package_name }}
+```
+
+- **Configuration is validated at startup.** Every environment variable is read once, in
+  `src/infra/config.ts`. If anything is missing or invalid, the process exits with code 1
+  and lists every problem at once. See `.env.example` for the variables. With
+  `NODE_ENV=production` (set in the image), `JWT_SECRET` and `DATABASE_URL` are required.
+- **Migrations are a deploy step**, not part of startup:
+  `docker run -e DATABASE_URL=... {{ package_name }} node dist/infra/db/migrate.js`.
+- **Logs** are JSON on stdout (pino), at `LOG_LEVEL` (default `info`).
+- **Graceful shutdown.** On `SIGTERM` or `SIGINT` the server stops accepting connections,
+  waits for in-flight requests, closes the database pool, and exits with code 0. If that
+  takes more than 10 seconds it exits with code 1.
+- **The image runs as a non-root user** and contains only compiled JavaScript and
+  production dependencies.
+
+`just image-check` (part of `just gauntlet-full`) builds the image and tests all of the
+above against a running container.
 
 ## Mutation testing scope
 
@@ -189,7 +212,8 @@ The gauntlet still enforces *how well* the result is built; spec-kit just makes 
 │   ├── application/          # Use cases + the ports they need (orchestrate, don't decide)
 │   ├── infra/db/             # Drizzle schema, migrations, client, repositories (implement ports)
 │   ├── http/                  # Fastify app + routes (translate HTTP <-> use cases)
-│   └── composition.ts        # Composition root: wires ports to real adapters
+│   ├── composition.ts        # Composition root: wires ports to real adapters
+│   └── main.ts               # Process entry point: validates config, then loads the app
 ├── tests/
 │   ├── architecture/          # Gate 4: auth matrix
 │   ├── holdout/                # Gate 5: sealed security invariants

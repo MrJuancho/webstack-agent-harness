@@ -89,6 +89,7 @@ gauntlet-full: gauntlet
     just db-seed-check
     just test-holdouts
     pnpm run mutate:diff
+    just image-check
 
 # Nivel 4: Auditoría nocturna exhaustiva -- mutación completa (no solo el
 # diff) del dominio puro. `incremental` en stryker.config.mjs solo ayuda
@@ -158,6 +159,13 @@ dev-token SUBJECT="dev-user":
 
 test-holdouts:
     bash scripts/test-holdouts.sh
+
+# Construye la imagen de producción (Dockerfile) y la prueba corriendo:
+# falla cerrado sin configuración, arranca, corre sin root, migra, y se
+# apaga de forma ordenada con SIGTERM.
+image-check:
+    just db-up
+    bash scripts/test-docker-image.sh __DB_NAME__
 
 # RUTA EXCLUSIVA HUMANA: Sellado de suite hold-out
 seal-holdouts:
