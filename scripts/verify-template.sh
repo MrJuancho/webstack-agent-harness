@@ -325,7 +325,12 @@ if [ -d "$SCRATCH_DIR/node_modules" ]; then
       ARCH_OUTPUT=$(cd "$SCRATCH_DIR" && pnpm run lint:arch 2>&1)
       ARCH_CODE=$?
       rm -f "$SCRATCH_DIR/$ARCH_FILE"
-      if [ "$ARCH_CODE" -eq 0 ] || ! printf '%s' "$ARCH_OUTPUT" | grep -q "error $ARCH_RULE: $ARCH_FILE"; then
+      # Sin los códigos ANSI: en CI (FORCE_COLOR) depcruise colorea "error" y
+      # la ruta, y los escapes quedan en medio del texto que se busca --
+      # este check pasaba en local y fallaba en CI con las reglas mordiendo
+      # bien.
+      ARCH_PLAIN=$(printf '%s' "$ARCH_OUTPUT" | sed -E 's/\x1B\[[0-9;]*[A-Za-z]//g')
+      if [ "$ARCH_CODE" -eq 0 ] || ! printf '%s' "$ARCH_PLAIN" | grep -q "error $ARCH_RULE: $ARCH_FILE"; then
         echo "ERROR: la regla '$ARCH_RULE' no mordió: $ARCH_FILE importando '$ARCH_IMPORT' debería hacer fallar 'lint:arch' nombrando esa regla (código $ARCH_CODE):" >&2
         echo "$ARCH_OUTPUT" >&2
         ERRORS=$((ERRORS + 1))
