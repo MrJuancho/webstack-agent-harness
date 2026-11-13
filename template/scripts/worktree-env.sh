@@ -45,6 +45,16 @@ fi
 
 COMPOSE_PROJECT_NAME="${PACKAGE_NAME}-${HASH}"
 
+# JWT_SECRET: el servidor no arranca sin él (src/infra/auth/jwt-verifier.ts)
+# y a propósito no hay valor por defecto en el código. Se genera uno
+# aleatorio por worktree (256 bits) y se CONSERVA entre corridas de este
+# script, para no invalidar tokens ya emitidos con `just dev-token`.
+# .env.local está en .gitignore; el valor nunca se imprime.
+JWT_SECRET="$( { grep -E '^JWT_SECRET=' .env.local 2>/dev/null || true; } | head -1 | cut -d= -f2-)"
+if [ -z "$JWT_SECRET" ]; then
+  JWT_SECRET="$(head -c 48 /dev/urandom | sha256sum | cut -d' ' -f1)"
+fi
+
 cat > .env.local <<EOF
 # Generado por scripts/worktree-env.sh -- NO editar a mano.
 # \`just setup\` (o \`bash scripts/worktree-env.sh\` directamente) lo
@@ -52,8 +62,10 @@ cat > .env.local <<EOF
 # de ese script para el porqué.
 PG_PORT=${PG_PORT}
 COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+JWT_SECRET=${JWT_SECRET}
 EOF
 
 echo "✔ .env.local escrito para el worktree ${REPO_ROOT}:"
 echo "    PG_PORT=${PG_PORT}"
 echo "    COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}"
+echo "    JWT_SECRET=(generado, no se imprime)"

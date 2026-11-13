@@ -3,8 +3,9 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import { Type } from '@sinclair/typebox';
+import type { TokenVerifier } from '../application/auth/ports.js';
 import type { UseCases } from '../application/use-cases.js';
-import { buildUseCases } from '../composition.js';
+import { buildTokenVerifier, buildUseCases } from '../composition.js';
 import { requireAuth } from './auth.js';
 import { ErrorResponse } from './errors.js';
 import { taskRoutes } from './routes/tasks.js';
@@ -28,6 +29,10 @@ export interface BuildAppOptions {
   // Casos de uso ya construidos. Si se omite, se usan los reales de
   // src/composition.ts (Postgres); los tests pasan dobles en memoria.
   useCases?: UseCases;
+  // Verificador de tokens. Si se omite, se usa el real (JWT firmado con
+  // JWT_SECRET) -- y si JWT_SECRET falta, buildApp lanza: no hay modo de
+  // arrancar sin autenticación de verdad.
+  verifyToken?: TokenVerifier;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
@@ -40,6 +45,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   }
 
   const useCases = options.useCases ?? buildUseCases();
+
+  app.decorate('verifyToken', options.verifyToken ?? buildTokenVerifier());
+  app.decorateRequest('principal', null);
 
   // Todo error sale con la forma de ErrorResponse, la misma que documenta
   // el contrato OpenAPI. Sin esto, un error de validación de Fastify usa

@@ -84,6 +84,22 @@ small **reference feature**, `tasks` (`POST` and `GET /api/v1/tasks`), that cros
 layer — copy its shape for new features, and delete it once the project has its own. See
 [`AGENTS.md`](./AGENTS.md#convención-de-capas) for the file-by-file breakdown.
 
+## Authentication
+
+Protected routes verify a real signed JWT (HS256): the signature, the expiry (`exp`),
+and a subject (`sub`) are all required. The server **refuses to start** without a
+`JWT_SECRET` of at least 32 characters, and there is no default in the code.
+
+- **Locally**, `scripts/worktree-env.sh` (run by `just setup`) generates a random secret
+  per worktree in `.env.local`, which is gitignored.
+- **In production**, set `JWT_SECRET` in the deployment environment.
+- `just dev-token` prints a 1-hour token signed with the local secret, for manual testing:
+  `curl -H "Authorization: Bearer $(just dev-token)" localhost:3000/api/v1/tasks`.
+
+The project verifies tokens; it does not issue them. Login belongs to your identity
+provider. To verify against one (JWKS/OIDC), replace the adapter in
+`src/infra/auth/jwt-verifier.ts` — routes only depend on the `TokenVerifier` port.
+
 ## Mutation testing scope
 
 Stryker mutates **only `src/domain/**`** — pure business logic, no I/O, no database, no

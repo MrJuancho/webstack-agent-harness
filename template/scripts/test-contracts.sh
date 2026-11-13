@@ -40,9 +40,25 @@ if [ "$SERVER_READY" -ne 1 ]; then
   exit 1
 fi
 
+# Token real: requireAuth verifica firma y vencimiento, así que un
+# "Bearer cualquier-cosa" ya no pasa -- Schemathesis solo vería 401 y el
+# contrato de las rutas protegidas quedaría sin auditar.
+CONTRACT_TOKEN=$(pnpm exec tsx src/infra/auth/dev-token.ts contract-tests)
+
+# El 401 está documentado en el contrato: si el servidor rechazara este
+# token, Schemathesis vería solo 401 en cada ruta protegida y reportaría
+# todo en verde sin haber auditado ninguna respuesta real. Se confirma
+# que el token entra antes de confiar en la corrida.
+TOKEN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer ${CONTRACT_TOKEN}" http://127.0.0.1:3000/api/v1/profile)
+if [ "$TOKEN_STATUS" != "200" ]; then
+  echo "ERROR Gate 3: el servidor respondió ${TOKEN_STATUS} (no 200) al token de contratos -- Schemathesis no estaría auditando las rutas protegidas." >&2
+  exit 1
+fi
+
 echo "Servidor respondiendo. Ejecutando Schemathesis..."
 docker run --network host --rm \
   schemathesis/schemathesis:stable run http://127.0.0.1:3000/openapi.json \
-  -H "Authorization: Bearer test-token" \
+  -H "Authorization: Bearer ${CONTRACT_TOKEN}" \
   --checks not_a_server_error,status_code_conformance,content_type_conformance,response_schema_conformance \
   --max-examples 25

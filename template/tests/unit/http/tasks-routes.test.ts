@@ -21,6 +21,9 @@ describe('rutas de tareas (/api/v1/tasks)', () => {
   beforeEach(async () => {
     tasks = makeInMemoryTaskRepository();
     app = await buildApp({
+      // Verificador de prueba: acepta solo este token. El real (JWT) tiene
+      // sus propios tests en tests/unit/auth/ y tests/architecture/.
+      verifyToken: (token) => Promise.resolve(token === 'test-token' ? { subject: 'user-1' } : null),
       useCases: {
         createTask: makeCreateTask({ tasks, clock: () => NOW, newId: () => ID }),
         listTasks: makeListTasks({ tasks }),
@@ -69,6 +72,21 @@ describe('rutas de tareas (/api/v1/tasks)', () => {
 
     expect(response.statusCode).toBe(400);
     expect(Object.keys(response.json())).toEqual(['error']);
+  });
+
+  it('POST y GET responden 401 con un token que el verificador rechaza', async () => {
+    const headers = { authorization: 'Bearer otro-token' };
+    const post = await app.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      headers,
+      payload: { title: 'x' },
+    });
+    const get = await app.inject({ method: 'GET', url: '/api/v1/tasks', headers });
+
+    expect(post.statusCode).toBe(401);
+    expect(get.statusCode).toBe(401);
+    expect(tasks.stored).toEqual([]);
   });
 
   it('POST y GET responden 401 sin token', async () => {
