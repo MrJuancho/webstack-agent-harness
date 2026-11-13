@@ -7,33 +7,28 @@ cambió y por qué vive en `git log`, y en `docs/adr/` -- no aquí.
 
 ## En qué quedó la última sesión
 
-PR #8 (e2e contra Docker real + arreglos de mutación) y PR #9 mergeados.
-PR #9: `Verify E2E` NUNCA había pasado en CI (0 de 42 corridas) --
-`verify-e2e.yml` no instalaba gitleaks, que `doctor.sh` exige. Confirmado
-contra el log real de CI, no inferido. Además, en el `ci.yml` GENERADO,
-`gitleaks/gitleaks-action@v2` corta con exit 1 antes de instalar nada si el
-dueño del repo es una Organization sin `GITLEAKS_LICENSE` (de pago) --
-verificado en el código fuente de la action. Era también el ÚNICO escaneo
-de secretos real en CI: Gate 8 (`protect --staged`) escanea 0 commits en un
-checkout limpio. Reemplazado por binario fijado 8.24.3 + paso explícito
-`gitleaks git --redact --verbose .` sobre toda la historia.
+PR #12 mergeado: todas las actions salen de Node 20 (deprecado) a majors
+en node24 -- checkout v7, setup-node v7, pnpm/action-setup v6, setup-uv
+v10.3.3, setup-just v4 (composite sobre setup-crate node24). Notas:
 
-Verificado (logs crudos leídos): `Verify E2E` verde sobre `main`
-(`_commit=a3a7087`). `ci.yml` generado en GitHub real (repo privado temporal
-`MrJuancho/ci-smoke-20261031`): push a `main` todo verde, "Secret scan"
-escaneó 1 commit (Gate 8: 0); PR con clave AWS falsa falla en "Secret scan"
-(`aws-access-token`, REDACTED) y el resto se salta.
+- setup-uv ya NO publica tag flotante de major (desde v8): `@v10` no
+  resuelve y el job muere en "Set up job". Va fijado a versión exacta.
+- `ci.yml` generado: sin `version:` en pnpm/action-setup. Desde v4, si
+  difiere de `packageManager` el paso falla; ahora la única fuente de
+  verdad es `package.json`. Los workflows de la raíz sí lo conservan (no
+  hay package.json en la raíz).
+- El token de `gh` no tiene scope `workflow`: push HTTPS de archivos en
+  `.github/workflows/` a un repo nuevo es rechazado. Usar remoto SSH.
 
-Esa prueba halló otro bug, arreglado en PR #11: `_tasks` corría `git init`
-pelado, así que sin `init.defaultBranch=main` el proyecto nacía en `master`
-y su `ci.yml` (solo `main`) nunca corría. Ahora `git init -q -b main` (con
-fallback para git < 2.28); `verify-template.sh` lo verifica forzando
-`init.defaultBranch=master`. Confirmado generando desde el remoto
-(`_commit=f2d18f5`): nace en `main`. Repo temporal de prueba ya borrado.
+Verificado (logs crudos leídos): `Verify Template` y `Verify E2E` verdes
+en la rama; `ci.yml` generado en repo privado temporal
+(`MrJuancho/ci-smoke-20261113`, `_commit=425e062`): todo verde, pnpm
+resolvió 9.15.4 desde `packageManager`, secret scan 1 commit, cero avisos
+de Node 20. Repo temporal ya borrado.
 
 ## Qué sigue
 
-Nada pendiente. Menor: actions `@v3`/`@v4` corren en Node 20 (deprecado).
+Nada pendiente.
 
 ## Bloqueado / pendiente de decisión
 
