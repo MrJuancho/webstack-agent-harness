@@ -36,7 +36,7 @@ describe('readServerConfig', () => {
       PORT: '8080',
       LOG_LEVEL: 'warn',
       JWT_SECRET: SECRET,
-      DATABASE_URL: 'postgresql://app:pw@db.internal:5432/app',
+      DATABASE_URL: 'postgresql://app:pw@db.internal:6543/app',
     });
 
     expect(config).toEqual({
@@ -45,7 +45,7 @@ describe('readServerConfig', () => {
       port: 8080,
       logLevel: 'warn',
       jwtSecret: SECRET,
-      database: { url: 'postgresql://app:pw@db.internal:5432/app' },
+      database: { url: 'postgresql://app:pw@db.internal:6543/app' },
     });
   });
 
@@ -116,7 +116,7 @@ describe('readDatabaseConfig', () => {
   });
 
   it('usa DATABASE_URL si está definida', () => {
-    const url = 'postgres://app:pw@db.internal:5432/app';
+    const url = 'postgres://app:pw@db.internal:6543/app';
 
     expect(readDatabaseConfig({ DATABASE_URL: url })).toEqual({ url });
   });

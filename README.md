@@ -73,6 +73,10 @@ copied literally instead, and its one real substitution (`__DB_NAME__`) is resol
 per-worktree by `scripts/worktree-env.sh` (see "Running parallel worktrees" in the
 generated project's own README for why).
 
+`template/package.json` is also copied literally, for a different reason: Dependabot
+only updates a file with that exact name. Its one substitution (the package name,
+`package-name-placeholder`) is resolved by the same `sed` mechanism.
+
 ## Workflow: this repo requires PRs, generated projects don't
 
 `main` is branch-protected: every change needs a PR with a green `verify-template.sh`
@@ -88,6 +92,18 @@ gh pr create --base main --head fix/whatever --title "..." --body "..."
 # wait for the verify-template.sh check, then:
 gh pr merge --squash --delete-branch
 ```
+
+## Dependency updates
+
+Dependabot ([`.github/dependabot.yml`](./.github/dependabot.yml)) opens weekly PRs for
+this repo's workflows, the generated `ci.yml`, and the dependencies every new project
+starts with (`template/package.json`, `template/pnpm-lock.yaml`, `template/Dockerfile`).
+A PR that touches those template files also runs `Verify E2E` against the PR itself —
+the full gauntlet of a project generated from it — so a green PR has been run, not
+just rendered. Merging stays manual. Generated projects get their own config
+(`template/.github/dependabot.yml`). See
+[`docs/adr/0007-actualizaciones-de-dependencias.md`](./docs/adr/0007-actualizaciones-de-dependencias.md)
+for what is not covered.
 
 ## Maintaining this template
 

@@ -5,10 +5,26 @@ name: Verify E2E
 # Programado + disparo manual, para que el hueco que scripts/verify-e2e.sh
 # existe para cerrar no vuelva a pasar inadvertido por mucho tiempo si se
 # rompe.
+#
+# Excepción: un PR que toca las dependencias de la plantilla (los que abre
+# Dependabot, .github/dependabot.yml) SÍ lo dispara. verify-template.sh no
+# instala ni corre el gauntlet, así que sin esto un bump se mergearía sin
+# haber corrido nunca. En ese caso el proyecto se genera desde el checkout
+# del PR (E2E_TEMPLATE_SOURCE), no desde el remoto.
 on:
   schedule:
     - cron: '17 6 * * *'
   workflow_dispatch: {}
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'template/package.json'
+      - 'template/pnpm-lock.yaml'
+      - 'template/Dockerfile'
+      - 'template/docker-compose.yml.jinja'
+      - 'template/.github/workflows/**'
+      - 'scripts/verify-e2e.sh'
+      - '.github/workflows/verify-e2e.yml'
 
 jobs:
   verify-e2e:
@@ -55,6 +71,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
 
       - name: Run end-to-end verification
+        env:
+          E2E_TEMPLATE_SOURCE: ${{ github.event_name == 'pull_request' && github.workspace || '' }}
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           bash scripts/verify-e2e.sh

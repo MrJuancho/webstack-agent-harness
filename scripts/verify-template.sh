@@ -110,6 +110,30 @@ if [ -n "$LEFTOVER_JINJA" ]; then
   ERRORS=$((ERRORS + 1))
 fi
 
+# package.json se copia literal (no es .jinja, para que Dependabot pueda
+# actualizarlo en este repo -- ADR-0007) y su nombre lo pone un `sed` de
+# `_tasks`. Si ese sed deja de matchear, el proyecto nace llamándose
+# "package-name-placeholder" y worktree-env.sh deriva de ahí el puerto y
+# el proyecto de Compose: todos los proyectos generados chocarían.
+GEN_PACKAGE_NAME=$(sed -n 's/^  "name": "\(.*\)",$/\1/p' "$SCRATCH_DIR/package.json" 2>/dev/null | head -1)
+if [ "$GEN_PACKAGE_NAME" = "verify-template" ]; then
+  echo "✔ package.json generado lleva el package_name pedido (verify-template)."
+else
+  echo "ERROR: package.json generado tiene name='$GEN_PACKAGE_NAME', se esperaba 'verify-template' -- el sed de _tasks en copier.yml no reemplazó el placeholder." >&2
+  ERRORS=$((ERRORS + 1))
+fi
+
+# Las actualizaciones automáticas existen en los dos lados: la config de
+# este repo y la que recibe cada proyecto generado.
+for DEPENDABOT_FILE in "$REPO_ROOT/.github/dependabot.yml" "$SCRATCH_DIR/.github/dependabot.yml"; do
+  if [ -f "$DEPENDABOT_FILE" ] && grep -q '^version: 2$' "$DEPENDABOT_FILE"; then
+    echo "✔ $DEPENDABOT_FILE existe."
+  else
+    echo "ERROR: falta $DEPENDABOT_FILE (o no es una config de Dependabot v2)." >&2
+    ERRORS=$((ERRORS + 1))
+  fi
+done
+
 # AGENTS.md/README.md mencionan "webstack-agent-harness" a propósito (el
 # link de atribución al template) -- cualquier OTRA aparición sí es un
 # leftover real (nombres de recetas/scripts que deberían haberse

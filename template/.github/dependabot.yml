@@ -1,0 +1,61 @@
+# Actualizaciones automáticas de dependencias. Dependabot abre los PRs
+# solo; el CI (.github/workflows/ci.yml) corre `just gauntlet-full` sobre
+# cada uno, así que un PR en verde ya pasó todos los gates. Mergear sigue
+# siendo una decisión humana.
+#
+# NO cubre (se actualizan a mano): la versión de Gitleaks fijada en
+# ci.yml, el campo `packageManager` (pnpm) de package.json y la imagen
+# `schemathesis/schemathesis:stable` de scripts/test-contracts.sh.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Un solo PR semanal con todos los minor y patch; cada major llega
+      # en su propio PR.
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # El major de Node se decide a mano: vive en tres lugares a la vez
+      # (imagen del Dockerfile, node-version de ci.yml, @types/node).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Imagen base del Dockerfile de producción.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+
+  # Postgres de docker-compose.yml.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      # Un major de Postgres no lee el directorio de datos del anterior:
+      # es una migración (pg_upgrade o dump/restore), no un bump.
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]

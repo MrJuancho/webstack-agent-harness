@@ -123,6 +123,18 @@ docker run -e JWT_SECRET=... -e DATABASE_URL=postgres://... -p 3000:3000 {{ pack
 `just image-check` (part of `just gauntlet-full`) builds the image and tests all of the
 above against a running container.
 
+## Dependency updates
+
+Dependabot (`.github/dependabot.yml`) opens weekly pull requests for npm packages,
+GitHub Actions, the `Dockerfile` base image and the Postgres image in
+`docker-compose.yml`. Minor and patch updates arrive grouped in one PR; each major
+update gets its own. CI runs `just gauntlet-full` on every one, so a green PR has
+passed every gate. Merging is still your decision.
+
+Not proposed automatically: Node and Postgres major versions. Not covered at all
+(update by hand): the Gitleaks version pinned in `ci.yml`, the `packageManager` field
+in `package.json`, and the Schemathesis image in `scripts/test-contracts.sh`.
+
 ## Mutation testing scope
 
 Stryker mutates **only `src/domain/**`** — pure business logic, no I/O, no database, no
