@@ -106,8 +106,11 @@ report_provenance() {
 
 ANSWERS_FILE="$REPO_ROOT/.copier-answers.yml"
 if [ -f "$ANSWERS_FILE" ]; then
-  ANSWERS_COMMIT=$(grep -E '^_commit:' "$ANSWERS_FILE" | head -1 | sed -E "s/^_commit:[[:space:]]*//; s/^['\"]//; s/['\"]\$//")
-  ANSWERS_SRC=$(grep -E '^_src_path:' "$ANSWERS_FILE" | head -1 | sed -E "s/^_src_path:[[:space:]]*//; s/^['\"]//; s/['\"]\$//")
+  # `|| true`: sin match, grep sale con 1 y `set -e` + `pipefail` mataban
+  # el script acá mismo, en silencio, antes de llegar al aviso de abajo
+  # que existe justo para ese caso.
+  ANSWERS_COMMIT=$({ grep -E '^_commit:' "$ANSWERS_FILE" || true; } | head -1 | sed -E "s/^_commit:[[:space:]]*//; s/^['\"]//; s/['\"]\$//")
+  ANSWERS_SRC=$({ grep -E '^_src_path:' "$ANSWERS_FILE" || true; } | head -1 | sed -E "s/^_src_path:[[:space:]]*//; s/^['\"]//; s/['\"]\$//")
   if [ -z "$ANSWERS_COMMIT" ] || [ -z "$ANSWERS_SRC" ]; then
     report_provenance warn-or-fail ".copier-answers.yml existe pero no tiene _commit/_src_path -- no se puede verificar la procedencia."
   else

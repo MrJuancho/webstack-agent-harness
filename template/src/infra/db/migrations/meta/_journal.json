@@ -8,6 +8,13 @@
       "when": 1789319151896,
       "tag": "0000_sweet_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794558307031,
+      "tag": "0001_create_tasks",
+      "breakpoints": true
     }
   ]
 }

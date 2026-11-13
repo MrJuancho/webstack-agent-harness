@@ -294,6 +294,53 @@ else
   ERRORS=$((ERRORS + 1))
 fi
 
+# Convención de capas (dependency-cruiser): mismo principio que el check
+# de Gate 10 de arriba -- una regla de arquitectura que no se prueba a sí
+# misma puede quedar de adorno (un `path` que ya no matchea tras mover una
+# carpeta) pasando en verde para siempre. Primero, el proyecto recién
+# generado debe pasar limpio; después, por cada regla de capa, se planta
+# UN import prohibido y se afirma que `lint:arch` falla nombrando esa
+# regla exacta.
+if [ -d "$SCRATCH_DIR/node_modules" ]; then
+  echo "==> Verificando la convención de capas (dependency-cruiser) con imports prohibidos reales..."
+  ARCH_BASELINE=$(cd "$SCRATCH_DIR" && pnpm run lint:arch 2>&1)
+  ARCH_BASELINE_CODE=$?
+  if [ "$ARCH_BASELINE_CODE" -ne 0 ]; then
+    echo "ERROR: 'pnpm run lint:arch' falla en el proyecto recién generado, sin tocar nada:" >&2
+    echo "$ARCH_BASELINE" >&2
+    ERRORS=$((ERRORS + 1))
+  else
+    # regla | archivo a plantar | import prohibido (relativo a ese archivo)
+    ARCH_CASES=(
+      "domain-isolation|src/domain/__arch_check__.ts|../application/use-cases.js"
+      "application-isolation|src/application/__arch_check__.ts|../infra/db/schema.js"
+      "infra-cannot-access-http|src/infra/__arch_check__.ts|../http/errors.js"
+      "http-cannot-access-infra|src/http/__arch_check__.ts|../infra/db/schema.js"
+    )
+    ARCH_FAILED=0
+    for ARCH_CASE in "${ARCH_CASES[@]}"; do
+      IFS='|' read -r ARCH_RULE ARCH_FILE ARCH_IMPORT <<<"$ARCH_CASE"
+      printf "import * as forbidden from '%s';\nexport const archCheck = forbidden;\n" "$ARCH_IMPORT" \
+        >"$SCRATCH_DIR/$ARCH_FILE"
+      ARCH_OUTPUT=$(cd "$SCRATCH_DIR" && pnpm run lint:arch 2>&1)
+      ARCH_CODE=$?
+      rm -f "$SCRATCH_DIR/$ARCH_FILE"
+      if [ "$ARCH_CODE" -eq 0 ] || ! printf '%s' "$ARCH_OUTPUT" | grep -q "error $ARCH_RULE: $ARCH_FILE"; then
+        echo "ERROR: la regla '$ARCH_RULE' no mordió: $ARCH_FILE importando '$ARCH_IMPORT' debería hacer fallar 'lint:arch' nombrando esa regla (código $ARCH_CODE):" >&2
+        echo "$ARCH_OUTPUT" >&2
+        ERRORS=$((ERRORS + 1))
+        ARCH_FAILED=1
+      fi
+    done
+    if [ "$ARCH_FAILED" -eq 0 ]; then
+      echo "✔ Convención de capas: el proyecto generado pasa limpio y las ${#ARCH_CASES[@]} reglas de capa muerden con un import prohibido real."
+    fi
+  fi
+else
+  echo "ERROR: no hay node_modules en el proyecto generado -- no se puede verificar la convención de capas. Bloqueo preventivo." >&2
+  ERRORS=$((ERRORS + 1))
+fi
+
 if [ "$ERRORS" -gt 0 ]; then
   echo "✖ Verificación del template falló ($ERRORS problema(s))." >&2
   exit 1

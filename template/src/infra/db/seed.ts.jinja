@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { config } from 'dotenv';
-import { auditLogs } from './schema.js';
+import { auditLogs, tasks } from './schema.js';
 
 config();
 // PG_PORT es específico de este worktree -- ver scripts/worktree-env.sh.
@@ -28,6 +28,19 @@ export async function seed(): Promise<void> {
       action: 'DEFAULT_ROLE_CREATED',
       entity: 'ROLE',
       createdAt: new Date('2026-01-01T00:00:01.000Z'),
+    },
+  ]);
+
+  await db.insert(tasks).values([
+    {
+      id: 'b0000000-0000-0000-0000-000000000001',
+      title: 'Leer AGENTS.md',
+      createdAt: new Date('2026-01-01T00:00:02.000Z'),
+    },
+    {
+      id: 'b0000000-0000-0000-0000-000000000002',
+      title: 'Reemplazar la feature de referencia por la primera real',
+      createdAt: new Date('2026-01-01T00:00:03.000Z'),
     },
   ]);
 

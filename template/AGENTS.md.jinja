@@ -44,6 +44,51 @@ Todo agente debe ejecutar el nivel adecuado según el ciclo de trabajo:
 
 ---
 
+## Convención de capas
+
+```
+src/domain/        reglas de negocio puras -- deciden, no hacen I/O
+src/application/   casos de uso + puertos -- orquestan, no deciden
+src/infra/         adaptadores de salida (Postgres) -- implementan los puertos
+src/http/          adaptador de entrada (rutas Fastify) -- traduce HTTP <-> casos de uso
+src/composition.ts raíz de composición -- conecta cada puerto con su adaptador real
+```
+
+Cada capa solo importa de las que tiene más adentro: `domain` de nadie;
+`application` solo de `domain`; `infra` y `http` de `application` y `domain`, nunca
+una de la otra. `dependency-cruiser` lo exige en `just gauntlet` (`domain-isolation`,
+`application-isolation`, `infra-cannot-access-http`, `http-cannot-access-infra` en
+`.dependency-cruiser.js`). `src/composition.ts` es la única excepción, a propósito: es
+el único archivo que ve todas las capas.
+
+**La feature de referencia (`tasks`) es el patrón a copiar** para cualquier feature
+nueva -- y a borrar cuando el proyecto tenga las suyas. Un archivo por capa:
+
+| Archivo | Qué le toca | Cómo se prueba |
+| --- | --- | --- |
+| `src/domain/tasks/task.ts` | Toda regla sobre una tarea (qué título es válido). Devuelve `Result`, no lanza. Recibe `id` y `now` como parámetros (Gate 10). | `task.test.ts` co-ubicado + `tests/property/`; Stryker lo muta. |
+| `src/application/tasks/ports.ts` | Lo que el caso de uso necesita de afuera: `TaskRepository`, `Clock`, `IdGenerator`. | -- (solo tipos) |
+| `src/application/tasks/create-task.ts`, `list-tasks.ts` | Orquestar: leer reloj/id de sus dependencias, pedirle la decisión al dominio, persistir. | `tests/unit/tasks/`, con el repositorio en memoria de `tests/helpers/`. |
+| `src/infra/db/task-repository.ts` | Implementar `TaskRepository` con Drizzle. Solo traduce dominio <-> SQL. | `tests/integration/`, contra Postgres real, con `assertMaxQueries` (Gate 6). |
+| `src/http/routes/tasks.ts` | Esquemas TypeBox (validan la FORMA), `requireAuth`, y el mapeo resultado -> status (`201`, `422` para un error de dominio). | `tests/unit/http/` con `buildApp({ useCases })` en memoria; Schemathesis (Gate 3); matriz de auth (Gate 4). |
+| `src/composition.ts` | Construir los casos de uso con adaptadores reales, reloj real e ids reales. | Lo ejercitan Gate 3 y Gate 4, que levantan la app real. |
+
+Reglas que ningún gate puede exigir por sí solo -- quedan en el autor y el Reviewer
+(checklist, punto H):
+
+- **Una decisión de negocio va en `src/domain/`**, aunque sea un `if` de una línea. En
+  un caso de uso, un handler o un adaptador queda fuera del alcance de mutación sin que
+  nada se queje.
+- **El esquema HTTP valida forma; el dominio valida reglas.** `title` es un string: lo
+  dice el esquema, y Fastify responde `400`. Un título de solo espacios no es válido:
+  lo dice el dominio, y la ruta responde `422`.
+- **El reloj y los ids se leen solo en `src/composition.ts`.** De ahí para adentro son
+  dependencias inyectadas (`clock`, `newId`), y al dominio llegan como valores.
+- **Un puerto se declara donde se usa** (`src/application/`), en términos del dominio --
+  no es un espejo de la tabla ni del ORM.
+
+---
+
 ## Mutación: qué se prueba y qué no
 
 Stryker (`just gauntlet-full` con `mutate:diff`, `just audit` con `mutate:full`)
@@ -52,12 +97,15 @@ sin reloj, sin dependencias de Fastify. Es una regla, no una sugerencia: si lóg
 negocio se filtra a un handler HTTP o a un adaptador de infraestructura, sale del
 alcance de la mutación sin que ningún gate se queje -- ese es el modo de falla que esta
 convención existe para prevenir. `dependency-cruiser` (`domain-isolation` en
-`.dependency-cruiser.js`) ya bloquea que `src/domain` importe de `infra`/`http`; queda
-en el autor y en el Reviewer que la lógica en sí (no solo los imports) viva ahí.
+`.dependency-cruiser.js`) ya bloquea que `src/domain` importe de cualquier otra capa;
+queda en el autor y en el Reviewer que la lógica en sí (no solo los imports) viva ahí
+-- ver "Convención de capas" arriba.
 
-Handlers, adaptadores y cableado (`src/http/`, `src/infra/`) **no** se mutan -- no
-porque no importen, sino porque ya tienen cobertura de otro tipo, más barata y de
-señal más directa para esas capas: Schemathesis audita el contrato OpenAPI (Gate 3),
+Casos de uso, handlers, adaptadores y cableado (`src/application/`, `src/http/`,
+`src/infra/`, `src/composition.ts`) **no** se mutan -- no porque no importen, sino
+porque ya tienen cobertura de otro tipo, más barata y de señal más directa para esas
+capas: los casos de uso tienen tests unitarios con dobles en memoria (y no deberían
+contener decisiones que mutar), Schemathesis audita el contrato OpenAPI (Gate 3),
 la matriz de auth confirma que cada ruta declara `preHandler`/`isPublic` (Gate 4), y el
 detector de N+1 (Gate 6) audita el patrón de queries. Mutar esas capas también pagaría
 un round trip a Postgres por mutante -- costo alto, señal baja, para un tipo de bug que
