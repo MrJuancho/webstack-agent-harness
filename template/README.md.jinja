@@ -72,6 +72,34 @@ came from a stale template snapshot is a real incident, not a hypothetical one.
 Each tier includes everything in the tier below it. Details on all 10 gates live in
 [`AGENTS.md`](./AGENTS.md#2-los-10-gates-de-seguridad).
 
+## Layers and the reference feature
+
+```
+domain  <-  application  <-  infra, http        (composition.ts wires them)
+```
+
+Each layer imports only from the ones to its left; `infra` and `http` never import each
+other. `dependency-cruiser` enforces this in `just gauntlet`. The project ships with one
+small **reference feature**, `tasks` (`POST` and `GET /api/v1/tasks`), that crosses every
+layer — copy its shape for new features, and delete it once the project has its own. See
+[`AGENTS.md`](./AGENTS.md#convención-de-capas) for the file-by-file breakdown.
+
+## Authentication
+
+Protected routes verify a real signed JWT (HS256): the signature, the expiry (`exp`),
+and a subject (`sub`) are all required. The server **refuses to start** without a
+`JWT_SECRET` of at least 32 characters, and there is no default in the code.
+
+- **Locally**, `scripts/worktree-env.sh` (run by `just setup`) generates a random secret
+  per worktree in `.env.local`, which is gitignored.
+- **In production**, set `JWT_SECRET` in the deployment environment.
+- `just dev-token` prints a 1-hour token signed with the local secret, for manual testing:
+  `curl -H "Authorization: Bearer $(just dev-token)" localhost:3000/api/v1/tasks`.
+
+The project verifies tokens; it does not issue them. Login belongs to your identity
+provider. To verify against one (JWKS/OIDC), replace the adapter in
+`src/infra/auth/jwt-verifier.ts` — routes only depend on the `TokenVerifier` port.
+
 ## Mutation testing scope
 
 Stryker mutates **only `src/domain/**`** — pure business logic, no I/O, no database, no
@@ -79,15 +107,15 @@ clock, no Fastify dependency. That's an enforced convention, not a suggestion: b
 logic that leaks into an HTTP handler or an infra adapter falls out of mutation scope
 without any gate complaining, which is exactly the failure mode this boundary exists to
 prevent. `dependency-cruiser`'s `domain-isolation` rule blocks `src/domain` from
-importing `infra`/`http`; keeping the *logic* itself there too is on the author and the
+importing any other layer; keeping the *logic* itself there too is on the author and the
 reviewer. An ESLint rule (Gate 10, `no-restricted-syntax`, runs in `gauntlet-fast`)
 blocks reading the wall clock or a non-deterministic random source from inside
 `src/domain` — a single intermittent read there breaks fast-check's reproducibility and
 makes Stryker's mutants run differently between runs, the worst possible failure mode
 because it passes green most of the time.
 
-Handlers, adapters, and wiring (`src/http/`, `src/infra/`) are deliberately **not**
-mutated — not because they don't matter, but because they're already covered more
+Use cases, handlers, adapters, and wiring (`src/application/`, `src/http/`,
+`src/infra/`, `src/composition.ts`) are deliberately **not** mutated — not because they don't matter, but because they're already covered more
 cheaply and more directly by other gates: Schemathesis audits the OpenAPI contract
 (Gate 3), the auth matrix confirms every route declares `preHandler`/`isPublic`
 (Gate 4), and the N+1 detector (Gate 6) audits query patterns. Mutating those layers
@@ -157,9 +185,11 @@ The gauntlet still enforces *how well* the result is built; spec-kit just makes 
 │   ├── hooks/                # Agent + git hooks (Layers 1-2)
 │   └── test-*.sh             # Individual gate implementations
 ├── src/
-│   ├── domain/               # Pure business logic + co-located *.test.ts (mutated by Stryker)
-│   ├── http/                  # Fastify app + routes
-│   └── infra/db/             # Drizzle schema, migrations, client
+│   ├── domain/               # Pure business rules + co-located *.test.ts (mutated by Stryker)
+│   ├── application/          # Use cases + the ports they need (orchestrate, don't decide)
+│   ├── infra/db/             # Drizzle schema, migrations, client, repositories (implement ports)
+│   ├── http/                  # Fastify app + routes (translate HTTP <-> use cases)
+│   └── composition.ts        # Composition root: wires ports to real adapters
 ├── tests/
 │   ├── architecture/          # Gate 4: auth matrix
 │   ├── holdout/                # Gate 5: sealed security invariants

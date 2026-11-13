@@ -133,7 +133,10 @@ salida de emergencia disfrazada de justificación.
 ### H. Fuga de capa
 
 ¿Hay lógica de dominio (una decisión, no una traducción de entrada/salida)
-en handlers de `src/http/`, adaptadores de `src/infra/`, o middleware?
+en casos de uso de `src/application/`, handlers de `src/http/`, adaptadores
+de `src/infra/`, `src/composition.ts`, o middleware? Un caso de uso
+orquesta (lee reloj/ids de sus dependencias, llama al dominio, persiste);
+un `if` sobre los datos del negocio ahí ya es una decisión fuera de lugar.
 Queda fuera del alcance de mutación sin que ningún gate se queje -- ver
 "Convención de capas" en AGENTS.md. Incluye el caso específico de una
 lectura de `Date.now()`, `new Date()` sin argumentos, `performance.now()`,

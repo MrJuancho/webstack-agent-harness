@@ -33,9 +33,12 @@ schema drift, reversible migrations, auth matrix, N+1 detection) → `gauntlet-f
 diff mutation) → `audit` (scheduled — full-domain mutation). A change MUST NOT be
 considered complete until the tier appropriate to its stage exits 0.
 
-### III. Domain/Infra/HTTP Isolation
-`src/domain` MUST NOT import from `src/infra` or `src/http`; `src/infra` MUST NOT import
-from `src/http`. This is mechanically enforced by `dependency-cruiser`
+### III. Domain/Application/Infra/HTTP Isolation
+`src/domain` MUST NOT import from any other layer; `src/application` (use cases and the
+ports they declare) MUST import only from `src/domain`; `src/infra` and `src/http` MUST
+NOT import from each other. Only `src/composition.ts` wires ports to real adapters.
+Business decisions MUST live in `src/domain`, not in a use case, handler, or adapter.
+The import rules are mechanically enforced by `dependency-cruiser`
 (`.dependency-cruiser.js`) as part of `just gauntlet`, not left to code review. Business
 logic stays testable and swappable independent of the database or HTTP framework.
 

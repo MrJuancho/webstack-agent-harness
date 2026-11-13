@@ -150,6 +150,12 @@ test-contracts:
     @command -v docker >/dev/null 2>&1 || (echo "ERROR: Docker ausente" && exit 1)
     bash scripts/test-contracts.sh
 
+# Token de desarrollo (1h) firmado con el JWT_SECRET de este worktree,
+# para probar rutas protegidas a mano:
+#   curl -H "Authorization: Bearer $(just dev-token)" localhost:3000/api/v1/tasks
+dev-token SUBJECT="dev-user":
+    @pnpm exec tsx src/infra/auth/dev-token.ts {{SUBJECT}}
+
 test-holdouts:
     bash scripts/test-holdouts.sh
 
