@@ -29,8 +29,7 @@ para correr en local el gauntlet de un proyecto generado.
 3. Básicos de producción: logging (hoy `logger: false`), apagado ordenado,
    validación de variables de entorno al arrancar, Dockerfile de la app.
    (El manejador central de errores ya entró en el PR #14.)
-4. Actualización automática de dependencias (Renovate o Dependabot), en
-   este repo y en los proyectos generados.
+4. Renovate o Dependabot, en este repo y en los proyectos generados.
 5. Después, multi-base de datos: primero aislar los comandos de Postgres
    de los gates detrás de una interfaz, luego UNA base más.
 
