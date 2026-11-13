@@ -34,6 +34,16 @@ set -uo pipefail
 # credenciales -- exactamente el tipo de falso negativo que probar la URL
 # canónica evita.
 TEMPLATE_URL="https://github.com/MrJuancho/webstack-agent-harness.git"
+
+# Modo PR: con E2E_TEMPLATE_SOURCE=<ruta a un checkout de este repo> el
+# proyecto se genera desde el HEAD de ESE checkout, no desde el remoto.
+# Existe para poder correr el gauntlet completo sobre un PR ANTES de
+# mergearlo (los bumps de Dependabot). No reemplaza al modo por defecto:
+# no puede atrapar la trampa de los tags descrita arriba, así que la
+# corrida programada sigue yendo contra el remoto, y acá se saltean el
+# check de `_commit` y el modo estricto de doctor (compararían contra un
+# HEAD remoto que, por definición, todavía no tiene este cambio).
+LOCAL_SOURCE="${E2E_TEMPLATE_SOURCE:-}"
 PROJECT_DIR=$(mktemp -d)
 ERRORS=0
 
@@ -55,6 +65,17 @@ for TOOL in copier just pnpm docker jq git gitleaks pg_isready; do
   }
 done
 
+if [ -n "$LOCAL_SOURCE" ]; then
+  echo "==> MODO PR: generando desde el checkout local $LOCAL_SOURCE (HEAD), no desde el remoto."
+  EXPECTED_HEAD=""
+  COPY_OUTPUT=$(copier copy "$LOCAL_SOURCE" "$PROJECT_DIR" --vcs-ref HEAD \
+    --data project_name="Verify E2E" \
+    --data package_name="verify-e2e" \
+    --data db_name="verify_e2e_dev" \
+    --data github_owner="MrJuancho" \
+    --trust --defaults 2>&1)
+  COPY_CODE=$?
+else
 echo "==> Consultando el HEAD remoto real de $TEMPLATE_URL antes de generar..."
 # `awk '$2 == "HEAD"'`, no un simple `{print $1}`: `git ls-remote <repo>
 # HEAD` matchea como patrón cualquier ref que TERMINE en "HEAD" (ej.
@@ -76,6 +97,7 @@ COPY_OUTPUT=$(copier copy "$TEMPLATE_URL" "$PROJECT_DIR" \
   --data github_owner="MrJuancho" \
   --trust --defaults 2>&1)
 COPY_CODE=$?
+fi
 
 if [ "$COPY_CODE" -ne 0 ]; then
   echo "ERROR: 'copier copy' falló (código $COPY_CODE):" >&2
@@ -86,7 +108,9 @@ fi
 cd "$PROJECT_DIR"
 
 echo "==> Verificando que el proyecto generado viene del HEAD remoto esperado..."
-if [ -f .copier-answers.yml ]; then
+if [ -n "$LOCAL_SOURCE" ]; then
+  echo "    (modo PR: se saltea -- el proyecto viene del checkout local, no del remoto)"
+elif [ -f .copier-answers.yml ]; then
   ACTUAL_COMMIT=$(grep -E '^_commit:' .copier-answers.yml | head -1 | sed -E "s/^_commit:[[:space:]]*//; s/^['\"]//; s/['\"]\$//")
   case "$EXPECTED_HEAD" in
     "$ACTUAL_COMMIT"*)
@@ -131,7 +155,9 @@ fi
 
 echo "==> Corriendo 'just setup' de verdad (Docker real, Postgres real, doctor en modo estricto)..."
 SETUP_LOG=$(mktemp)
-if DOCTOR_STRICT_TEMPLATE_FRESHNESS=1 just setup >"$SETUP_LOG" 2>&1; then
+STRICT_FRESHNESS=1
+[ -n "$LOCAL_SOURCE" ] && STRICT_FRESHNESS=0
+if DOCTOR_STRICT_TEMPLATE_FRESHNESS="$STRICT_FRESHNESS" just setup >"$SETUP_LOG" 2>&1; then
   echo "✔ 'just setup' terminó en verde."
 else
   echo "ERROR: 'just setup' falló:" >&2

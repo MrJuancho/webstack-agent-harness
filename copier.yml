@@ -24,6 +24,11 @@ _skip_if_exists:
 # `_tasks`, después de copiar. (El nombre de proyecto de Docker Compose ya
 # no se hardcodea en el justfile -- viene de COMPOSE_PROJECT_NAME en
 # .env.local, uno distinto por worktree, ver scripts/worktree-env.sh.)
+#
+# `package.json` tampoco es `.jinja`, por otro motivo: Dependabot solo
+# actualiza un archivo que se llame exactamente `package.json` (junto a
+# su pnpm-lock.yaml). Su única sustitución (`package-name-placeholder`,
+# un nombre npm válido) también se resuelve con `sed` acá. Ver ADR-0007.
 _tasks:
   # git init primero: `just install-hooks` (parte de `just setup`) necesita
   # que exista `.git/hooks/`, y `copier copy` no inicializa git por su
@@ -40,6 +45,7 @@ _tasks:
   # git, `git init` re-inicializa sin tocar su rama actual.
   - "git init -q -b main 2>/dev/null || { git init -q && git symbolic-ref HEAD refs/heads/main; } || true"
   - "sed -i 's/__DB_NAME__/{{ db_name }}/g' justfile"
+  - "sed -i 's/\"name\": \"package-name-placeholder\"/\"name\": \"{{ package_name }}\"/' package.json"
   - "command -v bash >/dev/null 2>&1 && bash scripts/generate-pdf.sh || true"
   - "command -v just >/dev/null 2>&1 && just --unstable --fmt 2>/dev/null || true"
 

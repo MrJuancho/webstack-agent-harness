@@ -111,6 +111,11 @@ Reglas que ningún gate puede exigir por sí solo -- quedan en el autor y el Rev
   construye y la prueba corriendo de verdad: se niega a arrancar sin configuración,
   responde `/health`, corre las migraciones compiladas y sale con `0` ante `SIGTERM`.
   Las migraciones se corren como paso de despliegue: `node dist/infra/db/migrate.js`.
+- **Dependencias.** Dependabot (`.github/dependabot.yml`) abre PRs semanales (npm,
+  actions, imágenes). El CI corre `just gauntlet-full` sobre cada uno. Un PR de
+  Dependabot en rojo se arregla en el código o se cierra; nunca se relaja un gate ni
+  se toca `.github/dependabot.yml` para que pase. Los majors de Node y de Postgres
+  no se proponen: son decisiones humanas.
 
 ---
 

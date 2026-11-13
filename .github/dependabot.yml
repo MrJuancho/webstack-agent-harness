@@ -1,0 +1,52 @@
+# Actualizaciones automáticas de dependencias de ESTE repo (la plantilla).
+# Los proyectos generados traen su propio archivo: template/.github/dependabot.yml.
+# Por qué Dependabot y qué queda afuera: docs/adr/0007-actualizaciones-de-dependencias.md
+#
+# Un PR que toca las dependencias de la plantilla dispara además Verify E2E
+# (ver `pull_request.paths` en .github/workflows/verify-e2e.yml): el
+# gauntlet completo de un proyecto generado desde ese PR.
+version: 2
+updates:
+  # Dependencias con las que nace cada proyecto generado. Funciona porque
+  # template/package.json es un package.json real (no .jinja) al lado de
+  # su pnpm-lock.yaml -- Dependabot actualiza los dos juntos.
+  - package-ecosystem: npm
+    directory: /template
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # El major de Node se decide a mano: vive en tres lugares a la vez
+      # (imagen del Dockerfile, node-version de CI, @types/node).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  # Workflows de este repo ("/" = .github/workflows) y el ci.yml que
+  # reciben los proyectos generados, en un mismo PR para que no diverjan.
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /template/.github/workflows
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Imagen base del Dockerfile de producción de la plantilla.
+  - package-ecosystem: docker
+    directory: /template
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
